@@ -71,3 +71,55 @@ class SeguridadMultiinstitucionTests(TestCase):
         self.assertEqual(self.institucion_a.nombre, "Colegio A actualizado")
         self.assertEqual(self.institucion_b.nombre, "Colegio B")
         self.assertEqual(self.institucion_a.eventos_auditoria.count(), 1)
+
+    def test_usuario_solamente_visualiza_usuarios_de_su_institucion(self):
+        self.client.force_login(self.usuario_a)
+        response = self.client.get(reverse("instituciones:usuarios"))
+        self.assertContains(response, self.usuario_a.username)
+        self.assertNotContains(response, self.usuario_b.username)
+
+    def test_detalle_y_edicion_de_usuario_externo_son_404(self):
+        self.client.force_login(self.usuario_a)
+        self.assertEqual(self.client.get(reverse("instituciones:usuario_detalle", args=[self.asignacion_b.pk])).status_code, 404)
+        self.assertEqual(self.client.post(reverse("instituciones:usuario_editar", args=[self.asignacion_b.pk]), {}).status_code, 404)
+
+    def test_nuevo_usuario_solo_se_asocia_a_institucion_activa(self):
+        self.client.force_login(self.usuario_a)
+        response = self.client.post(reverse("instituciones:usuario_crear"), {
+            "first_name": "Nueva", "last_name": "Persona", "username": "nueva",
+            "email": "nueva@example.com", "rol": UsuarioInstitucion.Rol.DOCENTE,
+            "password1": "Una-clave-segura-2026", "password2": "Una-clave-segura-2026",
+        })
+        self.assertEqual(response.status_code, 302)
+        nueva = UsuarioInstitucion.objects.get(usuario__username="nueva")
+        self.assertEqual(nueva.institucion, self.institucion_a)
+
+    def test_cambio_institucion_rechaza_asignacion_ajena(self):
+        self.client.force_login(self.usuario_a)
+        response = self.client.post(reverse("core:cambiar_institucion", args=[self.asignacion_b.pk]))
+        self.assertEqual(response.status_code, 404)
+        self.assertNotEqual(self.client.session.get("asignacion_institucion_id"), self.asignacion_b.pk)
+
+    def test_cambio_institucion_permite_asignacion_propia_activa(self):
+        otra = UsuarioInstitucion.objects.create(usuario=self.usuario_a, institucion=self.institucion_b, rol=UsuarioInstitucion.Rol.DIRECTOR)
+        self.client.force_login(self.usuario_a)
+        response = self.client.post(reverse("core:cambiar_institucion", args=[otra.pk]))
+        self.assertRedirects(response, reverse("core:institucion_dashboard"))
+        self.assertEqual(self.client.session["asignacion_institucion_id"], otra.pk)
+
+    def test_superusuario_lista_instituciones(self):
+        superusuario = get_user_model().objects.create_superuser(username="global", password="segura-123")
+        self.client.force_login(superusuario)
+        response = self.client.get(reverse("instituciones:lista"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.institucion_a.nombre)
+
+    def test_administrador_institucional_no_accede_auditoria_global(self):
+        self.client.force_login(self.usuario_a)
+        self.assertEqual(self.client.get(reverse("core:auditoria")).status_code, 403)
+
+    def test_paginas_nuevas_requieren_autenticacion(self):
+        for route in ("core:perfil", "core:mis_instituciones", "instituciones:usuarios", "instituciones:usuario_crear"):
+            response = self.client.get(reverse(route))
+            self.assertEqual(response.status_code, 302, route)
+            self.assertIn(reverse("login"), response.url)

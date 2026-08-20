@@ -27,3 +27,11 @@
     event.currentTarget.innerHTML = input.type === "password" ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
   });
 })();
+
+document.addEventListener("DOMContentLoaded", () => document.getElementById("apLoadingBar")?.classList.add("done"));
+document.addEventListener("click", event => {
+  const link = event.target.closest("a[href]");
+  if (link && link.origin === location.origin && !link.hash && !event.ctrlKey && !event.metaKey) {
+    document.getElementById("apLoadingBar")?.classList.add("loading");
+  }
+});

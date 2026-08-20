@@ -28,6 +28,11 @@ from .models import (
     TipoCarrera,
     VersionPensum,
 )
+
+
+@superusuario_required
+def landing(request):
+    return render(request, "catalogos/landing.html")
 from .services import duplicar_version_pensum
 
 

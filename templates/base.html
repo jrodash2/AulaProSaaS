@@ -9,11 +9,12 @@
   <link href="{% static 'css/aulapro.css' %}" rel="stylesheet">
 </head>
 <body>
+  {% include 'components/loading_bar.html' %}
   <div class="app-shell">
     {% include 'partials/sidebar.html' %}
     <div class="app-page">
       {% include 'partials/topbar.html' %}
-      <main class="app-content">
+      <main class="app-content ap-enter">
         <nav aria-label="breadcrumb"><ol class="breadcrumb small mb-4"><li class="breadcrumb-item"><a href="{% url 'core:inicio' %}">AulaPro</a></li><li class="breadcrumb-item active">{% block breadcrumb %}Inicio{% endblock %}</li></ol></nav>
         {% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">{{ message }}<button class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}
         {% block content %}{% endblock %}

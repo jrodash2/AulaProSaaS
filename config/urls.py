@@ -5,7 +5,6 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from cuentas.forms import AulaProAuthenticationForm
-
 urlpatterns = [
     path("admin/", admin.site.urls),
     path(
@@ -23,3 +22,7 @@ urlpatterns = [
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+handler403 = "core.views.error_403"
+handler404 = "core.views.error_404"
+handler500 = "core.views.error_500"

@@ -32,7 +32,16 @@ def global_dashboard(request):
 
 @institucion_required
 def institucion_dashboard(request):
-    return render(request, "core/institucion_dashboard.html")
+    from academico.models import CicloEscolar, JornadaInstitucion, OfertaAcademica
+    ciclo = CicloEscolar.objects.filter(institucion=request.institucion, es_actual=True).first()
+    context = {
+        "ciclo_actual": ciclo,
+        "tiene_ciclo": CicloEscolar.objects.filter(institucion=request.institucion).exists(),
+        "tiene_oferta": OfertaAcademica.objects.filter(institucion=request.institucion, activa=True).exists(),
+        "tiene_jornadas": JornadaInstitucion.objects.filter(institucion=request.institucion, activa=True).exists(),
+        "tiene_usuarios": request.institucion.asignaciones_usuario.filter(activo=True).exists(),
+    }
+    return render(request, "core/institucion_dashboard.html", context)
 
 
 @login_required

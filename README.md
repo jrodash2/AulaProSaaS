@@ -93,8 +93,8 @@ Una carrera posee múltiples versiones; cada versión contiene grados y `CursoPe
 
 ## Producción
 
-Use `DJANGO_SETTINGS_MODULE=config.settings.production`, una `SECRET_KEY` externa y una URL PostgreSQL segura. Los settings de producción requieren HTTPS, cookies seguras, HSTS y `DEBUG=False`. Sirva los archivos estáticos mediante el servidor web o almacenamiento de archivos correspondiente y los uploads de `media/` fuera del repositorio.
+Use el módulo unificado `DJANGO_SETTINGS_MODULE=config.settings`, una `SECRET_KEY` externa y una URL PostgreSQL segura. La configuración de producción se controla mediante variables de entorno y requiere HTTPS, cookies seguras, HSTS y `DEBUG=False`. Sirva los archivos estáticos mediante el servidor web o almacenamiento de archivos correspondiente y los uploads de `media/` fuera del repositorio.
 
 ## Alcance siguiente
 
-`catalogos` está listo para incorporar posteriormente niveles, carreras, versiones de pensum, áreas y cursos oficiales DIGECUR/MINEDUC. No contiene datos ficticios ni catálogos incompletos.
+`catalogos` conserva las referencias globales oficiales y `academico` materializa, con trazabilidad, la oferta, grados, cursos, jornadas y secciones particulares de cada institución. No se modifica el pensum global al personalizar la estructura institucional.

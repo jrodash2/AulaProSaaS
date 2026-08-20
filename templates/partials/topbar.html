@@ -1,0 +1,9 @@
+<header class="topbar">
+  <button class="icon-button" id="sidebarToggle" aria-label="Alternar menú"><i class="bi bi-list"></i></button>
+  <div class="institution-name">{% if institucion_activa %}{{ institucion_activa.nombre_corto|default:institucion_activa.nombre }}{% else %}Plataforma AulaPro{% endif %}</div>
+  <div class="topbar-actions">
+    <button class="icon-button" id="themeToggle" aria-label="Cambiar tema"><i class="bi bi-moon-stars"></i></button>
+    <div class="user-area"><span class="user-avatar">{{ user.first_name|default:user.username|slice:':1'|upper }}</span><span class="user-copy"><strong>{{ user.get_full_name|default:user.username }}</strong><small>{% if user.is_superuser %}Superadministrador{% else %}{{ request.asignacion_institucion.get_rol_display }}{% endif %}</small></span></div>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="icon-button" title="Cerrar sesión"><i class="bi bi-box-arrow-right"></i></button></form>
+  </div>
+</header>

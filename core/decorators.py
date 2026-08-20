@@ -39,3 +39,14 @@ def administrador_institucion_required(view):
             raise PermissionDenied
         return view(request, *args, **kwargs)
     return wrapped
+
+
+def gestion_alumnos_required(view):
+    """Autoriza expedientes a roles directivos y secretaría del tenant activo."""
+    @institucion_required
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        if request.asignacion_institucion.rol not in {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA"}:
+            raise PermissionDenied
+        return view(request, *args, **kwargs)
+    return wrapped

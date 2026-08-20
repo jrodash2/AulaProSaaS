@@ -20,6 +20,7 @@ urlpatterns = [
     path("institucion/", include("instituciones.urls")),
     path("catalogos/", include("catalogos.urls")),
     path("academico/", include("academico.urls")),
+    path("alumnos/", include("alumnos.urls")),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

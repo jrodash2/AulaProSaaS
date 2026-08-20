@@ -57,3 +57,27 @@ if (window.AulaProOfertaOpciones) {
   nivel?.addEventListener("change", () => cargar(carrera, "nivel", nivel.value, "Seleccione una carrera"));
   carrera?.addEventListener("change", () => cargar(pensum, "carrera", carrera.value, "Seleccione una versión de pensum"));
 }
+
+if (window.AulaProCuiUrl) {
+  const cui = document.getElementById("id_alumno-cui");
+  const feedback = document.getElementById("cuiFeedback");
+  cui?.addEventListener("blur", async () => {
+    if (!cui.value) { feedback.textContent = "Se registrará con identificación pendiente."; return; }
+    const response = await fetch(`${window.AulaProCuiUrl}?cui=${encodeURIComponent(cui.value)}`);
+    const data = await response.json();
+    feedback.innerHTML = data.disponible ? '<span class="text-success">✓ CUI disponible</span>' : `Este alumno ya está registrado: <a href="${data.alumno.url}">${data.alumno.nombre}</a>`;
+  });
+}
+
+if (window.AulaProInscripcionOpciones) {
+  const chain = [
+    ["id_inscripcion-ciclo", "id_inscripcion-oferta_academica", "ciclo", "Seleccione oferta"],
+    ["id_inscripcion-oferta_academica", "id_inscripcion-grado", "oferta", "Seleccione grado"],
+    ["id_inscripcion-grado", "id_inscripcion-seccion", "grado", "Seleccione sección"],
+  ];
+  chain.forEach(([sourceId, targetId, key, label]) => document.getElementById(sourceId)?.addEventListener("change", async event => {
+    const target = document.getElementById(targetId); target.disabled = true;
+    const response = await fetch(`${window.AulaProInscripcionOpciones}?${key}=${encodeURIComponent(event.target.value)}`);
+    const data = await response.json(); target.innerHTML = `<option value="">${label}</option>` + data.resultados.map(x => `<option value="${x.id}">${x.nombre}</option>`).join(""); target.disabled = false;
+  }));
+}

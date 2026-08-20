@@ -34,8 +34,12 @@ def global_dashboard(request):
 def institucion_dashboard(request):
     from academico.models import CicloEscolar, JornadaInstitucion, OfertaAcademica
     ciclo = CicloEscolar.objects.filter(institucion=request.institucion, es_actual=True).first()
+    from alumnos.models import Alumno, Inscripcion
     context = {
         "ciclo_actual": ciclo,
+        "total_alumnos_activos": Alumno.objects.filter(institucion=request.institucion, estado=Alumno.Estado.ACTIVO).count(),
+        "inscripciones_actuales": Inscripcion.objects.filter(institucion=request.institucion, ciclo=ciclo, estado=Inscripcion.Estado.ACTIVA).count() if ciclo else 0,
+        "tiene_estudiantes": Alumno.objects.filter(institucion=request.institucion).exists(),
         "tiene_ciclo": CicloEscolar.objects.filter(institucion=request.institucion).exists(),
         "tiene_oferta": OfertaAcademica.objects.filter(institucion=request.institucion, activa=True).exists(),
         "tiene_jornadas": JornadaInstitucion.objects.filter(institucion=request.institucion, activa=True).exists(),

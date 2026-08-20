@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "catalogos",
     "auditoria",
     "academico",
+    "alumnos",
 ]
 
 MIDDLEWARE = [

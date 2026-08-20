@@ -25,3 +25,8 @@ class InstitucionForm(forms.ModelForm):
             if image and getattr(image, "size", 0) > 2 * 1024 * 1024:
                 self.add_error(field_name, "La imagen no puede superar 2 MB.")
         return cleaned
+
+
+class InstitucionCrearForm(InstitucionForm):
+    class Meta(InstitucionForm.Meta):
+        fields = ("nombre", "nombre_corto", "codigo", "razon_social", "direccion", "departamento", "municipio", "telefono", "email", "sitio_web", "logo_principal", "logo_secundario", "color_primario", "color_secundario", "activa")

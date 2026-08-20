@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Carreras · AulaPro{% endblock %}
+{% block breadcrumb %}Catálogos / Carreras{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">Catálogo académico global</p>
+    <h1>Carreras</h1>
+    <p>Programas académicos de referencia para AulaPro y MINEDUC.</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'catalogos:carrera_crear' %}">
+    <i class="bi bi-plus-lg"></i> Nueva carrera
+  </a>
+</div>
+<form method="get" class="panel filter-bar">
+  <div class="filter-search">
+    <i class="bi bi-search"></i>
+    <input class="form-control" name="q" value="{{ filtros.q }}" placeholder="Buscar por nombre o código">
+  </div>
+  <select class="form-select" name="nivel">
+    <option value="">Todos los niveles</option>
+    {% for item in niveles %}<option value="{{ item.pk }}" {% if filtros.nivel == item.pk|stringformat:'s' %}selected{% endif %}>{{ item.nombre }}</option>{% endfor %}
+  </select>
+  <select class="form-select" name="tipo">
+    <option value="">Todos los tipos</option>
+    {% for item in tipos %}<option value="{{ item.pk }}" {% if filtros.tipo == item.pk|stringformat:'s' %}selected{% endif %}>{{ item.nombre }}</option>{% endfor %}
+  </select>
+  <select class="form-select" name="activo">
+    <option value="">Todos los estados</option>
+    <option value="1" {% if filtros.activo == '1' %}selected{% endif %}>Activas</option>
+    <option value="0" {% if filtros.activo == '0' %}selected{% endif %}>Inactivas</option>
+  </select>
+  <button class="btn btn-outline-primary">Filtrar</button>
+</form>
+<section class="panel p-0 overflow-hidden">
+  <div class="table-responsive">
+    <table class="table catalog-table align-middle">
+      <thead><tr><th>Carrera</th><th>Tipo</th><th>Duración</th><th>Acuerdo</th><th>Estado</th><th class="text-end">Acciones</th></tr></thead>
+      <tbody>
+      {% for carrera in carreras %}
+        <tr>
+          <td><strong>{{ carrera.nombre }}</strong><small>{{ carrera.codigo_interno }} · {{ carrera.nivel }}</small></td>
+          <td>{{ carrera.tipo_carrera|default:"Sin clasificar" }}</td>
+          <td>{{ carrera.duracion_anios }} año{{ carrera.duracion_anios|pluralize }}</td>
+          <td>{{ carrera.acuerdo_ministerial|default:"—" }}</td>
+          <td><span class="status {% if carrera.activa %}status-success{% else %}status-muted{% endif %}">{% if carrera.activa %}Activa{% else %}Inactiva{% endif %}</span>{% if carrera.en_revision %}<span class="status status-warning">En revisión</span>{% endif %}</td>
+          <td class="text-end table-actions"><a href="{% url 'catalogos:carrera_detalle' carrera.uuid %}" title="Ver"><i class="bi bi-eye"></i></a><a href="{% url 'catalogos:carrera_editar' carrera.uuid %}" title="Editar"><i class="bi bi-pencil"></i></a></td>
+        </tr>
+      {% empty %}<tr><td colspan="6" class="empty-state">No hay carreras que coincidan con los filtros.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% include 'catalogos/paginacion.html' %}
+{% endblock %}

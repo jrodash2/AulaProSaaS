@@ -1,1 +1,34 @@
-{% extends 'base.html' %}{% block title %}Inicio · AulaPro{% endblock %}{% block content %}<div class="page-heading"><div><p class="eyebrow">{{ institucion_activa.nombre }}</p><h1>Hola, {{ user.first_name|default:user.username }}</h1><p>Este es el punto de partida de tu gestión institucional.</p></div><span class="cycle-badge"><i class="bi bi-calendar3"></i> Ciclo actual · Pendiente</span></div><div class="metric-grid four"><article class="metric"><i class="bi bi-person-vcard"></i><div><span>Alumnos</span><strong>0</strong><small>Sin datos</small></div></article><article class="metric info"><i class="bi bi-person-workspace"></i><div><span>Docentes</span><strong>0</strong><small>Sin datos</small></div></article><article class="metric success"><i class="bi bi-calendar-check"></i><div><span>Asistencia</span><strong>—</strong><small>Sin datos</small></div></article><article class="metric warning"><i class="bi bi-receipt"></i><div><span>Pendiente de cobro</span><strong>Q 0.00</strong><small>Sin datos</small></div></article></div><section class="panel onboarding"><div><span class="section-icon"><i class="bi bi-sliders"></i></span><h2>Configuración inicial</h2><p>Completa los datos básicos de tu institución para preparar AulaPro para los próximos módulos.</p><a class="btn btn-primary" href="{% url 'instituciones:configuracion' %}">Configurar institución</a></div><div class="progress-copy"><strong>Primer paso</strong><span>Información institucional</span><div class="progress"><div class="progress-bar" style="width:25%"></div></div><small>Los siguientes pasos estarán disponibles próximamente.</small></div></section>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Inicio · AulaPro{% endblock %}
+{% block content %}
+<header class="dashboard-welcome">
+  <div><span class="welcome-label">{{ institucion_activa.nombre }}</span><h1>{{ saludo }}, {{ user.first_name|default:user.username }} <span aria-hidden="true">👋</span></h1><p>Aquí tienes un resumen de tu institución.</p></div>
+  <span class="cycle-pill"><i class="bi bi-calendar3"></i><span><small>Ciclo escolar</small><strong>Sin configurar</strong></span></span>
+</header>
+
+<section class="metrics-grid" aria-label="Resumen institucional">
+  {% include 'components/metric_card.html' with icon='people' label='Estudiantes' value='0' hint='Sin datos aún' tone='primary' %}
+  {% include 'components/metric_card.html' with icon='person-workspace' label='Docentes' value='0' hint='Sin datos aún' tone='info' %}
+  {% include 'components/metric_card.html' with icon='calendar-check' label='Asistencia' value='—' hint='Sin datos aún' tone='success' %}
+  {% include 'components/metric_card.html' with icon='receipt' label='Pendiente de cobro' value='Q 0.00' hint='Sin datos aún' tone='warning' %}
+</section>
+
+<section class="dashboard-section">
+  <div class="section-heading"><div><span class="section-kicker">Atajos</span><h2>Acciones rápidas</h2></div></div>
+  <div class="quick-actions">
+    <a href="{% url 'instituciones:configuracion' %}"><span class="quick-icon"><i class="bi bi-building-gear"></i></span><span><strong>Configurar institución</strong><small>Datos, identidad y contacto</small></span><i class="bi bi-arrow-right"></i></a>
+    <a href="{% url 'core:proximamente' 'usuarios' %}"><span class="quick-icon tone-info"><i class="bi bi-person-gear"></i></span><span><strong>Gestionar usuarios</strong><small>Accesos institucionales</small></span><i class="bi bi-arrow-right"></i></a>
+    <a href="{% url 'core:proximamente' 'academico' %}"><span class="quick-icon tone-accent"><i class="bi bi-mortarboard"></i></span><span><strong>Gestión académica</strong><small>Preparar oferta y ciclos</small></span><i class="bi bi-arrow-right"></i></a>
+  </div>
+</section>
+
+<div class="dashboard-columns">
+  <section class="dashboard-section"><div class="section-heading"><div><span class="section-kicker">Espacios de trabajo</span><h2>Módulos</h2></div></div><div class="module-grid">
+    {% include 'components/module_card.html' with icon='mortarboard' title='Gestión académica' description='Carreras, grados, cursos y ciclos.' url_name='academico' %}
+    {% include 'components/module_card.html' with icon='people' title='Estudiantes' description='Expedientes e inscripciones.' url_name='alumnos' %}
+    {% include 'components/module_card.html' with icon='wallet2' title='Finanzas' description='Pagos, cuotas y estados de cuenta.' url_name='finanzas' %}
+    {% include 'components/module_card.html' with icon='chat-dots' title='Comunicación' description='Avisos y comunicación escolar.' url_name='comunicacion' %}
+  </div></section>
+  <section class="ap-card onboarding-card"><div class="onboarding-header"><span class="onboarding-icon"><i class="bi bi-rocket-takeoff"></i></span><div><span class="section-kicker">Primeros pasos</span><h2>Configuración de tu institución</h2></div><strong>{{ progreso_configuracion }}%</strong></div><div class="progress ap-progress" role="progressbar" aria-label="Progreso de configuración" aria-valuenow="{{ progreso_configuracion }}" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width:{{ progreso_configuracion }}%"></div></div><ul class="onboarding-list"><li class="{% if datos_completos %}complete{% endif %}"><i class="bi {% if datos_completos %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i> Datos institucionales</li><li class="{% if usuarios_configurados %}complete{% endif %}"><i class="bi {% if usuarios_configurados %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i> Usuarios</li><li><i class="bi bi-circle"></i> Oferta académica</li><li><i class="bi bi-circle"></i> Ciclo escolar</li><li><i class="bi bi-circle"></i> Alumnos</li></ul><a class="btn-ap-primary w-100" href="{% url 'instituciones:configuracion' %}">Continuar configuración <i class="bi bi-arrow-right"></i></a></section>
+</div>
+{% endblock %}

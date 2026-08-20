@@ -1,1 +1,35 @@
-{% extends 'base.html' %}{% block title %}Institución · AulaPro{% endblock %}{% block breadcrumb %}Configuración / Institución{% endblock %}{% block content %}<div class="page-heading"><div><p class="eyebrow">Configuración</p><h1>Información institucional</h1><p>Actualiza la identidad y los datos de contacto de tu establecimiento.</p></div></div><form method="post" enctype="multipart/form-data" class="panel institution-form" novalidate>{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}<div class="form-grid">{% for field in form %}<div class="field {% if field.name == 'direccion' %}field-wide{% endif %}"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{% if 'logo' in field.name and field.value %}<div class="logo-preview"><img src="{{ field.value.url }}" alt="Logo actual"></div>{% endif %}{{ field }}{% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div>{% endfor %}</div><div class="form-actions"><a href="{% url 'core:institucion_dashboard' %}" class="btn btn-light">Cancelar</a><button class="btn btn-primary" type="submit">Guardar cambios</button></div></form>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Configuración institucional · AulaPro{% endblock %}
+{% block content %}
+{% include 'components/page_header.html' with eyebrow='Sistema' title='Configuración institucional' description='Administra la información, identidad y contacto de tu establecimiento.' %}
+<form method="post" enctype="multipart/form-data" class="settings-layout" novalidate data-institution-form>
+  {% csrf_token %}
+  <aside class="settings-nav" aria-label="Secciones de configuración">
+    <button type="button" class="active" data-settings-tab="general"><i class="bi bi-building"></i><span>General</span></button>
+    <button type="button" data-settings-tab="identidad"><i class="bi bi-palette"></i><span>Identidad</span></button>
+    <button type="button" data-settings-tab="contacto"><i class="bi bi-telephone"></i><span>Contacto</span></button>
+    <button type="button" disabled><i class="bi bi-mortarboard"></i><span>Configuración académica<small>Próximamente</small></span></button>
+    <button type="button" disabled><i class="bi bi-shield-lock"></i><span>Seguridad<small>Próximamente</small></span></button>
+  </aside>
+  <div class="settings-content">
+    {% if form.non_field_errors %}<div class="form-error-summary"><i class="bi bi-exclamation-triangle"></i><div><strong>Revisa la información ingresada</strong>{{ form.non_field_errors }}</div></div>{% endif %}
+    <section class="ap-card settings-panel active" data-settings-panel="general"><div class="form-section-heading"><span class="form-section-icon"><i class="bi bi-building"></i></span><div><h2>Información general</h2><p>Información con la que identificamos a tu institución.</p></div></div><div class="form-grid">
+      {% include 'components/form_field.html' with field=form.nombre %}
+      {% include 'components/form_field.html' with field=form.nombre_corto %}
+      {% include 'components/form_field.html' with field=form.direccion wide=True %}
+      {% include 'components/form_field.html' with field=form.departamento %}
+      {% include 'components/form_field.html' with field=form.municipio %}
+    </div></section>
+    <section class="ap-card settings-panel" data-settings-panel="identidad"><div class="form-section-heading"><span class="form-section-icon"><i class="bi bi-palette"></i></span><div><h2>Identidad visual</h2><p>Logos y colores que representan al establecimiento.</p></div></div><div class="identity-grid">
+      {% include 'components/logo_upload.html' with field=form.logo_principal title='Logo principal' preview_id='principalPreview' %}
+      {% include 'components/logo_upload.html' with field=form.logo_secundario title='Logo secundario' preview_id='secondaryPreview' %}
+    </div><div class="color-grid"><div class="color-control"><label for="{{ form.color_primario.id_for_label }}">Color principal</label><div><span class="color-swatch" data-color-swatch="{{ form.color_primario.id_for_label }}"></span>{{ form.color_primario }}<output data-color-output="{{ form.color_primario.id_for_label }}">{{ form.color_primario.value }}</output></div>{% for error in form.color_primario.errors %}<span class="field-error"><i class="bi bi-exclamation-circle"></i>{{ error }}</span>{% endfor %}</div><div class="color-control"><label for="{{ form.color_secundario.id_for_label }}">Color secundario</label><div><span class="color-swatch" data-color-swatch="{{ form.color_secundario.id_for_label }}"></span>{{ form.color_secundario }}<output data-color-output="{{ form.color_secundario.id_for_label }}">{{ form.color_secundario.value }}</output></div>{% for error in form.color_secundario.errors %}<span class="field-error"><i class="bi bi-exclamation-circle"></i>{{ error }}</span>{% endfor %}</div></div><div class="brand-preview"><span>Vista previa</span><div data-brand-preview><span class="brand-preview-mark">AP</span><div><strong>{{ institucion_activa.nombre_corto|default:institucion_activa.nombre }}</strong><small>Portal institucional</small></div></div></div></section>
+    <section class="ap-card settings-panel" data-settings-panel="contacto"><div class="form-section-heading"><span class="form-section-icon"><i class="bi bi-telephone"></i></span><div><h2>Información de contacto</h2><p>Canales oficiales para comunicarse con la institución.</p></div></div><div class="form-grid">
+      {% include 'components/form_field.html' with field=form.telefono %}
+      {% include 'components/form_field.html' with field=form.email %}
+      {% include 'components/form_field.html' with field=form.sitio_web wide=True %}
+    </div></section>
+    <div class="sticky-form-actions"><a href="{% url 'core:institucion_dashboard' %}" class="btn-ap-light">Cancelar</a><button class="btn-ap-primary" type="submit"><i class="bi bi-check-lg"></i> Guardar cambios</button></div>
+  </div>
+</form>
+{% endblock %}

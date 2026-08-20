@@ -71,3 +71,33 @@ class SeguridadMultiinstitucionTests(TestCase):
         self.assertEqual(self.institucion_a.nombre, "Colegio A actualizado")
         self.assertEqual(self.institucion_b.nombre, "Colegio B")
         self.assertEqual(self.institucion_a.eventos_auditoria.count(), 1)
+
+    def test_selector_rechaza_asignacion_de_otro_usuario(self):
+        self.client.force_login(self.usuario_a)
+        response = self.client.post(
+            reverse("core:cambiar_institucion"),
+            {"asignacion": self.asignacion_b.pk},
+        )
+        self.assertRedirects(response, reverse("core:institucion_dashboard"))
+        self.assertNotEqual(
+            self.client.session.get("asignacion_institucion_id"),
+            self.asignacion_b.pk,
+        )
+
+    def test_selector_permite_una_asignacion_propia_activa(self):
+        institucion_c = Institucion.objects.create(nombre="Colegio C", codigo="C")
+        asignacion_c = UsuarioInstitucion.objects.create(
+            usuario=self.usuario_a,
+            institucion=institucion_c,
+            rol=UsuarioInstitucion.Rol.DIRECTOR,
+        )
+        self.client.force_login(self.usuario_a)
+        response = self.client.post(
+            reverse("core:cambiar_institucion"),
+            {"asignacion": asignacion_c.pk},
+        )
+        self.assertRedirects(response, reverse("core:institucion_dashboard"))
+        self.assertEqual(
+            self.client.session["asignacion_institucion_id"],
+            asignacion_c.pk,
+        )

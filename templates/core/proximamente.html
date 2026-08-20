@@ -1,0 +1,3 @@
+{% extends 'base.html' %}
+{% block title %}{{ titulo }} · AulaPro{% endblock %}
+{% block content %}<section class="coming-soon"><span class="coming-icon"><i class="bi bi-{{ icono }}"></i></span><span class="ap-badge badge-info"><i class="bi bi-stars"></i> Próximamente</span><h1>Módulo de {{ titulo }}</h1><p>Esta función estará disponible próximamente. AulaPro está preparando la gestión de {{ descripcion }} para tu institución.</p><a class="btn-ap-secondary" href="{% url 'core:institucion_dashboard' %}"><i class="bi bi-arrow-left"></i> Volver al inicio</a></section>{% endblock %}

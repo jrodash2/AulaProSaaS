@@ -8,6 +8,6 @@
   <section class="panel form-section"><h2>Información general</h2><div class="form-grid">{% include 'catalogos/fields.html' with fields='codigo_interno,codigo_mineduc,nombre,nombre_corto,descripcion' %}</div></section>
   <section class="panel form-section"><h2>Información académica</h2><div class="form-grid">{% include 'catalogos/fields.html' with fields='nivel,tipo_carrera,duracion_anios,modalidad,jornada_referencia,activo,en_revision' %}</div></section>
   <section class="panel form-section"><h2>Información normativa</h2><div class="form-grid">{% include 'catalogos/fields.html' with fields='acuerdo_ministerial,fecha_acuerdo' %}</div></section>
-  <section class="panel form-section"><h2>Fuente oficial</h2><div class="form-grid">{% include 'catalogos/fields.html' with fields='fuente_oficial,url_fuente' %}</div><div class="form-actions"><a class="btn btn-light" href="{% if carrera %}{% url 'catalogos:carrera_detalle' carrera.uuid %}{% else %}{% url 'catalogos:carrera_lista' %}{% endif %}">Cancelar</a><button class="btn btn-primary">Guardar carrera</button></div></section>
+  <section class="panel form-section"><h2>Fuente oficial</h2><div class="form-grid">{% include 'catalogos/fields.html' with fields='fuente_oficial,url_fuente' %}</div><div class="form-actions"><a class="btn-ap-light" href="{% if carrera %}{% url 'catalogos:carrera_detalle' carrera.uuid %}{% else %}{% url 'catalogos:carrera_lista' %}{% endif %}">Cancelar</a><button class="btn-ap-primary">Guardar carrera</button></div></section>
 </form>
 {% endblock %}

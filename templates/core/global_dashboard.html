@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Plataforma · AulaPro{% endblock %}
+{% block content %}
+{% include 'components/page_header.html' with eyebrow='Administración SaaS' title='Panel de AulaPro' description='Supervisa la plataforma y accede rápidamente a sus herramientas.' %}
+
+<section class="metrics-grid metrics-grid-3" aria-label="Resumen de plataforma">
+  {% include 'components/metric_card.html' with icon='buildings' label='Instituciones' value=total_instituciones hint='Registradas en AulaPro' tone='primary' %}
+  {% include 'components/metric_card.html' with icon='check-circle' label='Instituciones activas' value=instituciones_activas hint='Con acceso habilitado' tone='success' %}
+  {% include 'components/metric_card.html' with icon='people' label='Usuarios' value=total_usuarios hint='Cuentas registradas' tone='info' %}
+</section>
+
+<section class="dashboard-section">
+  <div class="section-heading"><div><span class="section-kicker">Atajos</span><h2>Acciones rápidas</h2></div></div>
+  <div class="quick-actions">
+    <a href="/admin/instituciones/institucion/add/"><span class="quick-icon"><i class="bi bi-building-add"></i></span><span><strong>Nueva institución</strong><small>Registrar establecimiento</small></span><i class="bi bi-arrow-right"></i></a>
+    <a href="/admin/cuentas/usuario/"><span class="quick-icon tone-info"><i class="bi bi-person-gear"></i></span><span><strong>Gestionar usuarios</strong><small>Cuentas y accesos</small></span><i class="bi bi-arrow-right"></i></a>
+    <a href="{% url 'catalogos:carrera_lista' %}"><span class="quick-icon tone-accent"><i class="bi bi-mortarboard"></i></span><span><strong>Catálogo académico</strong><small>Carreras, cursos y pensa</small></span><i class="bi bi-arrow-right"></i></a>
+  </div>
+</section>
+
+<section class="ap-card table-card">
+  <div class="table-toolbar"><div><span class="section-kicker">Actividad reciente</span><h2>Últimas instituciones</h2></div><a class="btn-ap-secondary" href="/admin/instituciones/institucion/">Ver todas</a></div>
+  {% if ultimas_instituciones %}
+  <div class="table-responsive"><table class="table ap-table align-middle"><thead><tr><th>Institución</th><th>Código</th><th>Estado</th><th>Registro</th><th><span class="visually-hidden">Acciones</span></th></tr></thead><tbody>
+    {% for item in ultimas_instituciones %}<tr><td><div class="table-primary"><span class="table-avatar"><i class="bi bi-building"></i></span><span><strong>{{ item.nombre }}</strong><small>{{ item.municipio|default:'Ubicación pendiente' }}</small></span></div></td><td><code>{{ item.codigo }}</code></td><td>{% include 'components/status_badge.html' with status=item.activa true_label='Activa' false_label='Inactiva' %}</td><td>{{ item.fecha_creacion|date:'d/m/Y' }}</td><td class="text-end"><div class="dropdown"><button class="btn-ap-icon" data-bs-toggle="dropdown" aria-label="Acciones para {{ item.nombre }}"><i class="bi bi-three-dots-vertical"></i></button><div class="dropdown-menu dropdown-menu-end"><a class="dropdown-item" href="/admin/instituciones/institucion/{{ item.pk }}/change/"><i class="bi bi-pencil"></i> Editar</a><a class="dropdown-item" href="/admin/instituciones/usuarioinstitucion/?institucion__id__exact={{ item.pk }}"><i class="bi bi-people"></i> Ver usuarios</a></div></div></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}{% include 'components/empty_state.html' with icon='buildings' title='Todavía no hay instituciones' description='Registra la primera institución para comenzar a utilizar AulaPro.' action_url='/admin/instituciones/institucion/add/' action_label='Nueva institución' %}{% endif %}
+</section>
+{% endblock %}

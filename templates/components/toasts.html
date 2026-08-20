@@ -1,0 +1,9 @@
+{% if messages %}
+<div class="toast-container position-fixed top-0 end-0 p-3" aria-live="polite" aria-atomic="true">
+  {% for message in messages %}
+    <div class="toast ap-toast toast-{{ message.tags|default:'info' }}" role="status" data-bs-delay="4500">
+      <div class="toast-body"><i class="bi {% if message.tags == 'success' %}bi-check-circle-fill{% elif message.tags == 'error' %}bi-x-circle-fill{% elif message.tags == 'warning' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %}"></i><span>{{ message }}</span><button class="btn-close" data-bs-dismiss="toast" aria-label="Cerrar"></button></div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}

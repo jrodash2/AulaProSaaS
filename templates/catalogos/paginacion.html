@@ -1,0 +1,10 @@
+{% if pagina.paginator.num_pages > 1 %}
+<nav class="catalog-pagination" aria-label="Paginación">
+  <span>Mostrando {{ pagina.start_index }}–{{ pagina.end_index }} de {{ pagina.paginator.count }}</span>
+  <div>
+    {% if pagina.has_previous %}<a class="btn-ap-light" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ pagina.previous_page_number }}" aria-label="Página anterior"><i class="bi bi-chevron-left"></i></a>{% endif %}
+    <span class="pagination-current">{{ pagina.number }} / {{ pagina.paginator.num_pages }}</span>
+    {% if pagina.has_next %}<a class="btn-ap-light" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ pagina.next_page_number }}" aria-label="Página siguiente"><i class="bi bi-chevron-right"></i></a>{% endif %}
+  </div>
+</nav>
+{% endif %}

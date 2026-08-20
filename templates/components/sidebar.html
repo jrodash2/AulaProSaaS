@@ -1,0 +1,57 @@
+<aside class="sidebar" id="sidebar" aria-label="Navegación principal">
+  <div class="sidebar-header">
+    <a class="brand" href="{% url 'core:inicio' %}" title="AulaPro">
+      <span class="brand-mark">AP</span>
+      <span class="brand-copy">
+        <strong>AulaPro</strong>
+        <small>{% if institucion_activa %}{{ institucion_activa.nombre_corto|default:institucion_activa.nombre }}{% else %}Plataforma educativa{% endif %}</small>
+      </span>
+    </a>
+    <button class="sidebar-close" id="sidebarClose" aria-label="Cerrar navegación"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <nav class="sidebar-nav">
+    {% if es_superadministrador %}
+      <span class="nav-section">General</span>
+      <a class="nav-item {% if request.resolver_match.url_name == 'global_dashboard' %}active{% endif %}" href="{% url 'core:global_dashboard' %}" title="Inicio"><i class="bi bi-grid-1x2"></i><span>Inicio</span></a>
+      <span class="nav-section">Plataforma</span>
+      <a class="nav-item" href="/admin/instituciones/institucion/" title="Instituciones"><i class="bi bi-buildings"></i><span>Instituciones</span></a>
+      <a class="nav-item" href="/admin/cuentas/usuario/" title="Usuarios"><i class="bi bi-people"></i><span>Usuarios</span></a>
+      <span class="nav-section">Catálogos</span>
+      <a class="nav-item {% if request.resolver_match.kwargs.tipo == 'niveles' %}active{% endif %}" href="{% url 'catalogos:referencia_lista' tipo='niveles' %}" title="Niveles"><i class="bi bi-layers"></i><span>Niveles</span></a>
+      <a class="nav-item {% if request.resolver_match.url_name == 'carrera_lista' or request.resolver_match.url_name == 'carrera_detalle' %}active{% endif %}" href="{% url 'catalogos:carrera_lista' %}" title="Carreras"><i class="bi bi-mortarboard"></i><span>Carreras</span></a>
+      <a class="nav-item {% if request.resolver_match.kwargs.tipo == 'cursos' %}active{% endif %}" href="{% url 'catalogos:referencia_lista' tipo='cursos' %}" title="Cursos"><i class="bi bi-journal-bookmark"></i><span>Cursos</span></a>
+      <a class="nav-item {% if 'pensum' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'catalogos:carrera_lista' %}" title="Pensum"><i class="bi bi-diagram-3"></i><span>Pensum</span></a>
+      <span class="nav-section">Control</span>
+      <a class="nav-item" href="/admin/auditoria/eventoauditoria/" title="Auditoría"><i class="bi bi-shield-check"></i><span>Auditoría</span></a>
+      <span class="nav-section">Sistema</span>
+      <a class="nav-item" href="/admin/" title="Configuración"><i class="bi bi-gear"></i><span>Configuración</span></a>
+    {% else %}
+      <span class="nav-section">General</span>
+      <a class="nav-item {% if request.resolver_match.url_name == 'institucion_dashboard' %}active{% endif %}" href="{% url 'core:institucion_dashboard' %}" title="Inicio"><i class="bi bi-grid-1x2"></i><span>Inicio</span></a>
+      <span class="nav-section">Gestión académica</span>
+      <button class="nav-item nav-toggle" type="button" data-submenu="academicMenu" aria-expanded="false" title="Académico"><i class="bi bi-mortarboard"></i><span>Académico</span><i class="bi bi-chevron-down nav-chevron"></i></button>
+      <div class="nav-submenu" id="academicMenu">
+        <a href="{% url 'core:proximamente' 'academico' %}">Oferta académica</a>
+        <a href="{% url 'core:proximamente' 'academico' %}">Ciclos escolares</a>
+        <a href="{% url 'core:proximamente' 'academico' %}">Grados y secciones</a>
+        <a href="{% url 'core:proximamente' 'academico' %}">Cursos</a>
+      </div>
+      <span class="nav-section">Personas</span>
+      <a class="nav-item {% if request.resolver_match.kwargs.modulo == 'alumnos' %}active{% endif %}" href="{% url 'core:proximamente' 'alumnos' %}" title="Alumnos"><i class="bi bi-people"></i><span>Alumnos</span></a>
+      <a class="nav-item {% if request.resolver_match.kwargs.modulo == 'docentes' %}active{% endif %}" href="{% url 'core:proximamente' 'docentes' %}" title="Docentes"><i class="bi bi-person-workspace"></i><span>Docentes</span></a>
+      <a class="nav-item {% if request.resolver_match.kwargs.modulo == 'encargados' %}active{% endif %}" href="{% url 'core:proximamente' 'encargados' %}" title="Encargados"><i class="bi bi-person-hearts"></i><span>Encargados</span></a>
+      <span class="nav-section">Seguimiento</span>
+      <a class="nav-item {% if request.resolver_match.kwargs.modulo == 'asistencia' %}active{% endif %}" href="{% url 'core:proximamente' 'asistencia' %}" title="Asistencia"><i class="bi bi-calendar-check"></i><span>Asistencia</span></a>
+      <a class="nav-item {% if request.resolver_match.kwargs.modulo == 'calificaciones' %}active{% endif %}" href="{% url 'core:proximamente' 'calificaciones' %}" title="Calificaciones"><i class="bi bi-journal-check"></i><span>Calificaciones</span></a>
+      <a class="nav-item {% if request.resolver_match.kwargs.modulo == 'tareas' %}active{% endif %}" href="{% url 'core:proximamente' 'tareas' %}" title="Tareas"><i class="bi bi-clipboard-check"></i><span>Tareas</span></a>
+      <span class="nav-section">Administración</span>
+      <a class="nav-item {% if request.resolver_match.kwargs.modulo == 'finanzas' %}active{% endif %}" href="{% url 'core:proximamente' 'finanzas' %}" title="Finanzas"><i class="bi bi-wallet2"></i><span>Finanzas</span></a>
+      <a class="nav-item {% if request.resolver_match.kwargs.modulo == 'reportes' %}active{% endif %}" href="{% url 'core:proximamente' 'reportes' %}" title="Reportes"><i class="bi bi-bar-chart"></i><span>Reportes</span></a>
+      <a class="nav-item {% if request.resolver_match.kwargs.modulo == 'comunicacion' %}active{% endif %}" href="{% url 'core:proximamente' 'comunicacion' %}" title="Comunicación"><i class="bi bi-chat-dots"></i><span>Comunicación</span></a>
+      <span class="nav-section">Sistema</span>
+      <a class="nav-item {% if request.resolver_match.kwargs.modulo == 'usuarios' %}active{% endif %}" href="{% url 'core:proximamente' 'usuarios' %}" title="Usuarios"><i class="bi bi-person-gear"></i><span>Usuarios</span></a>
+      <a class="nav-item {% if request.resolver_match.app_name == 'instituciones' %}active{% endif %}" href="{% url 'instituciones:configuracion' %}" title="Configuración"><i class="bi bi-gear"></i><span>Configuración</span></a>
+    {% endif %}
+  </nav>
+  <div class="sidebar-footer"><i class="bi bi-shield-check"></i><span>Conexión segura</span></div>
+</aside>

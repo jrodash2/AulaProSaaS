@@ -1,0 +1,41 @@
+<header class="topbar">
+  <div class="topbar-start">
+    <button class="btn-ap-icon" id="sidebarToggle" aria-label="Alternar navegación" aria-controls="sidebar" aria-expanded="true"><i class="bi bi-list"></i></button>
+    <div class="topbar-context">
+      <nav class="app-breadcrumb" aria-label="Ruta de navegación">
+        <a href="{% url 'core:inicio' %}">Inicio</a><i class="bi bi-chevron-right"></i><span>{% if request.resolver_match.app_name == 'catalogos' %}Catálogos · {% if 'carrera' in request.resolver_match.url_name %}Carreras{% elif 'pensum' in request.resolver_match.url_name or 'grado' in request.resolver_match.url_name %}Pensum{% else %}Catálogo académico{% endif %}{% elif request.resolver_match.app_name == 'instituciones' %}Configuración institucional{% elif request.resolver_match.url_name == 'global_dashboard' %}Plataforma{% elif request.resolver_match.url_name == 'proximamente' %}Próximamente{% else %}Resumen{% endif %}</span>
+      </nav>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button class="btn-ap-icon topbar-future" aria-label="Buscar próximamente" title="Búsqueda próximamente"><i class="bi bi-search"></i></button>
+    <button class="btn-ap-icon topbar-future notification-button" aria-label="Notificaciones próximamente" title="Notificaciones próximamente"><i class="bi bi-bell"></i></button>
+    <button class="btn-ap-icon" id="themeToggle" aria-label="Cambiar tema"><i class="bi bi-moon-stars"></i></button>
+    <div class="dropdown user-dropdown">
+      <button class="user-menu-button" data-bs-toggle="dropdown" aria-expanded="false">
+        <span class="user-avatar">{{ user.first_name|default:user.username|slice:':1'|upper }}</span>
+        <span class="user-copy"><strong>{{ user.get_full_name|default:user.username }}</strong><small>{% if user.is_superuser %}Superadministrador{% else %}{{ request.asignacion_institucion.get_rol_display }}{% endif %}</small></span>
+        <i class="bi bi-chevron-down"></i>
+      </button>
+      <div class="dropdown-menu dropdown-menu-end user-dropdown-menu">
+        <div class="dropdown-user-summary"><span class="user-avatar">{{ user.first_name|default:user.username|slice:':1'|upper }}</span><div><strong>{{ user.get_full_name|default:user.username }}</strong><small>{{ user.email|default:'Cuenta AulaPro' }}</small></div></div>
+        {% if instituciones_disponibles %}
+          <div class="dropdown-label">Mis instituciones</div>
+          {% for asignacion in instituciones_disponibles %}
+            <form method="post" action="{% url 'core:cambiar_institucion' %}">
+              {% csrf_token %}<input type="hidden" name="asignacion" value="{{ asignacion.pk }}">
+              <button class="institution-option {% if request.asignacion_institucion.pk == asignacion.pk %}current{% endif %}" type="submit">
+                <span><strong>{{ asignacion.institucion.nombre_corto|default:asignacion.institucion.nombre }}</strong><small>{{ asignacion.get_rol_display }}</small></span>
+                {% if request.asignacion_institucion.pk == asignacion.pk %}<i class="bi bi-check2"></i>{% endif %}
+              </button>
+            </form>
+          {% endfor %}
+          <div class="dropdown-divider"></div>
+        {% endif %}
+        <button class="dropdown-item disabled" type="button"><i class="bi bi-person"></i> Mi perfil <small>Próximamente</small></button>
+        <button class="dropdown-item disabled" type="button"><i class="bi bi-sliders"></i> Preferencias <small>Próximamente</small></button>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="dropdown-item logout-item" type="submit"><i class="bi bi-box-arrow-right"></i> Cerrar sesión</button></form>
+      </div>
+    </div>
+  </div>
+</header>

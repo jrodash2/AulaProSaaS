@@ -1,0 +1,29 @@
+from functools import wraps
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import redirect
+
+
+def superusuario_required(view):
+    @login_required
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        if not request.user.is_superuser:
+            raise PermissionDenied
+        return view(request, *args, **kwargs)
+    return wrapped
+
+
+def institucion_required(view):
+    @login_required
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        if request.user.is_superuser:
+            return redirect("core:global_dashboard")
+        if not request.institucion:
+            messages.warning(request, "Tu usuario no tiene una institución activa asignada.")
+            return redirect("core:sin_institucion")
+        return view(request, *args, **kwargs)
+    return wrapped

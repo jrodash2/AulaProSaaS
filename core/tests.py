@@ -2,6 +2,8 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
+from django.conf import settings
+from pathlib import Path
 
 from instituciones.models import Institucion, UsuarioInstitucion
 
@@ -123,3 +125,39 @@ class SeguridadMultiinstitucionTests(TestCase):
             response = self.client.get(reverse(route))
             self.assertEqual(response.status_code, 302, route)
             self.assertIn(reverse("login"), response.url)
+
+    def test_rutas_principales_institucionales_responden(self):
+        self.client.force_login(self.usuario_a)
+        rutas = [
+            reverse("core:institucion_dashboard"), reverse("core:perfil"),
+            reverse("core:mis_instituciones"), reverse("instituciones:configuracion"),
+            reverse("instituciones:usuarios"), reverse("core:modulo", args=["academico"]),
+            reverse("core:modulo", args=["alumnos"]), reverse("core:modulo", args=["finanzas"]),
+        ]
+        for ruta in rutas:
+            with self.subTest(ruta=ruta):
+                self.assertEqual(self.client.get(ruta).status_code, 200)
+
+    def test_rutas_principales_globales_responden(self):
+        superusuario = get_user_model().objects.create_superuser(username="rutas", password="segura-123")
+        self.client.force_login(superusuario)
+        for nombre in ("core:global_dashboard", "instituciones:lista", "core:usuarios_globales", "core:auditoria", "core:sistema", "catalogos:landing"):
+            with self.subTest(nombre=nombre):
+                self.assertEqual(self.client.get(reverse(nombre)).status_code, 200)
+
+    def test_templates_de_usuario_no_enlazan_django_admin(self):
+        templates = Path(settings.BASE_DIR, "templates")
+        for archivo in templates.rglob("*.html"):
+            contenido = archivo.read_text(encoding="utf-8").lower()
+            with self.subTest(template=str(archivo.relative_to(templates))):
+                self.assertNotIn("/admin/", contenido)
+                self.assertNotIn("url 'admin:", contenido)
+
+    def test_cambio_password_conserva_sesion(self):
+        self.client.force_login(self.usuario_a)
+        response = self.client.post(reverse("core:cambiar_password"), {
+            "old_password": "segura-123", "new_password1": "Nueva-clave-segura-2026",
+            "new_password2": "Nueva-clave-segura-2026",
+        })
+        self.assertRedirects(response, reverse("core:perfil"))
+        self.assertIn("_auth_user_id", self.client.session)

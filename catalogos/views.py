@@ -69,6 +69,12 @@ def referencia_lista(request, tipo):
             Q(nombre__icontains=consulta)
             | Q(**{f"{campo_codigo}__icontains": consulta})
         )
+    estado = request.GET.get("estado", "")
+    if estado in {"1", "0"}:
+        objetos = objetos.filter(activo=estado == "1")
+    area = request.GET.get("area", "")
+    if modelo is CursoCatalogo and area:
+        objetos = objetos.filter(area_curricular_id=area)
     pagina, querystring = _paginar(request, objetos)
     return render(
         request,
@@ -80,6 +86,9 @@ def referencia_lista(request, tipo):
             "titulo": titulo,
             "tipo": tipo,
             "q": consulta,
+            "estado": estado,
+            "areas": AreaCurricular.objects.filter(activo=True) if modelo is CursoCatalogo else None,
+            "es_curso": modelo is CursoCatalogo,
         },
     )
 
@@ -99,6 +108,25 @@ def referencia_formulario(request, tipo, pk=None):
         "catalogos/referencia_formulario.html",
         {"form": form, "titulo": titulo, "objeto": objeto, "tipo": tipo},
     )
+
+
+@superusuario_required
+def referencia_detalle(request, tipo, pk):
+    modelo, _, titulo = _referencia(tipo)
+    objeto = get_object_or_404(modelo, pk=pk)
+    return render(request, "catalogos/referencia_detalle.html", {"objeto": objeto, "titulo": titulo, "tipo": tipo, "es_curso": modelo is CursoCatalogo})
+
+
+@superusuario_required
+def referencia_estado(request, tipo, pk):
+    modelo, _, _ = _referencia(tipo)
+    objeto = get_object_or_404(modelo, pk=pk)
+    if request.method == "POST":
+        objeto.activo = not objeto.activo
+        objeto.save(update_fields=("activo",))
+        registrar_evento(request, "ACTIVAR" if objeto.activo else "DESACTIVAR", objeto)
+        messages.success(request, f"{objeto} {'activado' if objeto.activo else 'desactivado'} correctamente.")
+    return redirect("catalogos:referencia_detalle", tipo=tipo, pk=pk)
 
 
 @superusuario_required
@@ -165,6 +193,17 @@ def carrera_detalle(request, uuid):
 
 
 @superusuario_required
+def carrera_estado(request, uuid):
+    carrera = get_object_or_404(CarreraCatalogo, uuid=uuid)
+    if request.method == "POST":
+        carrera.activa = not carrera.activa
+        carrera.save(update_fields=("activa",))
+        registrar_evento(request, "ACTIVAR" if carrera.activa else "DESACTIVAR", carrera)
+        messages.success(request, f"Carrera {'activada' if carrera.activa else 'desactivada'} correctamente.")
+    return redirect("catalogos:carrera_detalle", uuid=uuid)
+
+
+@superusuario_required
 def pensum_formulario(request, carrera_uuid, uuid=None):
     carrera = get_object_or_404(CarreraCatalogo, uuid=carrera_uuid)
     pensum = (
@@ -213,6 +252,18 @@ def grado_formulario(request, pensum_uuid, pk=None):
         "catalogos/editor_formulario.html",
         {"form": form, "pensum": pensum, "titulo": "Grado", "objeto": grado},
     )
+
+
+@superusuario_required
+def grado_estado(request, pensum_uuid, pk):
+    pensum = get_object_or_404(VersionPensum, uuid=pensum_uuid)
+    grado = get_object_or_404(GradoPensum, pk=pk, pensum=pensum)
+    if request.method == "POST":
+        grado.activo = not grado.activo
+        grado.save(update_fields=("activo",))
+        registrar_evento(request, "ACTIVAR" if grado.activo else "DESACTIVAR", grado)
+        messages.success(request, f"Grado {'activado' if grado.activo else 'desactivado'} correctamente.")
+    return redirect("catalogos:pensum_editor", uuid=pensum.uuid)
 
 
 @superusuario_required

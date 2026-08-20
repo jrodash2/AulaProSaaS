@@ -1,9 +1,10 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import update_session_auth_hash
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from auditoria.models import EventoAuditoria
-from cuentas.forms import PerfilForm
+from cuentas.forms import AulaProPasswordChangeForm, PerfilForm
 
 from cuentas.models import Usuario
 from instituciones.models import Institucion
@@ -62,6 +63,9 @@ def cambiar_institucion(request, asignacion_id):
         return redirect("core:mis_instituciones")
     asignacion = get_object_or_404(request.user.asignaciones_institucion, pk=asignacion_id, activo=True, institucion__activa=True)
     request.session["asignacion_institucion_id"] = asignacion.pk
+    from auditoria.services import registrar_evento
+    registrar_evento(request, "CAMBIAR_INSTITUCION", asignacion)
+    messages.success(request, f"Ahora estás trabajando en {asignacion.institucion.nombre}.")
     return redirect("core:institucion_dashboard")
 
 
@@ -73,7 +77,57 @@ def auditoria(request):
         eventos = eventos.filter(Q(usuario__username__icontains=q) | Q(accion__icontains=q) | Q(modelo__icontains=q))
     if request.GET.get("institucion"):
         eventos = eventos.filter(institucion_id=request.GET["institucion"])
+    if request.GET.get("accion"):
+        eventos = eventos.filter(accion=request.GET["accion"])
+    if request.GET.get("fecha"):
+        eventos = eventos.filter(fecha__date=request.GET["fecha"])
     return render(request, "core/auditoria.html", {"eventos": eventos[:100], "instituciones": Institucion.objects.all()})
+
+
+@superusuario_required
+def auditoria_detalle(request, pk):
+    evento = get_object_or_404(EventoAuditoria.objects.select_related("usuario", "institucion"), pk=pk)
+    return render(request, "core/auditoria_detalle.html", {"evento": evento})
+
+
+@superusuario_required
+def usuarios_globales(request):
+    usuarios = Usuario.objects.prefetch_related("asignaciones_institucion__institucion")
+    q = request.GET.get("q", "").strip()
+    if q:
+        usuarios = usuarios.filter(Q(username__icontains=q) | Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(email__icontains=q))
+    if request.GET.get("institucion"):
+        usuarios = usuarios.filter(asignaciones_institucion__institucion_id=request.GET["institucion"])
+    if request.GET.get("rol"):
+        usuarios = usuarios.filter(asignaciones_institucion__rol=request.GET["rol"])
+    if request.GET.get("estado") in {"activo", "inactivo"}:
+        usuarios = usuarios.filter(activo=request.GET["estado"] == "activo")
+    from instituciones.models import UsuarioInstitucion
+    return render(request, "core/usuarios_globales.html", {"usuarios": usuarios.distinct(), "instituciones": Institucion.objects.all(), "roles": UsuarioInstitucion.Rol.choices, "q": q})
+
+
+@superusuario_required
+def usuario_global_detalle(request, pk):
+    usuario = get_object_or_404(Usuario.objects.prefetch_related("asignaciones_institucion__institucion"), pk=pk)
+    return render(request, "core/usuario_global_detalle.html", {"usuario_detalle": usuario})
+
+
+@superusuario_required
+def sistema(request):
+    return render(request, "core/sistema.html")
+
+
+@login_required
+def cambiar_password(request):
+    form = AulaProPasswordChangeForm(request.user, request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        usuario = form.save()
+        update_session_auth_hash(request, usuario)
+        from auditoria.services import registrar_evento
+        registrar_evento(request, "CAMBIAR_PASSWORD", usuario)
+        messages.success(request, "Contraseña actualizada correctamente.")
+        return redirect("core:perfil")
+    return render(request, "core/cambiar_password.html", {"form": form})
 
 
 @login_required

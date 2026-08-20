@@ -5,8 +5,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from auditoria.services import registrar_evento
 from auditoria.models import EventoAuditoria
-from core.decorators import institucion_required, superusuario_required
+from core.decorators import (
+    administrador_institucion_required,
+    institucion_required,
+    superusuario_required,
+)
 from cuentas.forms import UsuarioInstitucionCrearForm, UsuarioInstitucionEditarForm
+from cuentas.forms import AulaProSetPasswordForm
 
 from .forms import InstitucionCrearForm, InstitucionForm
 from .models import Institucion, UsuarioInstitucion
@@ -53,10 +58,39 @@ def crear(request):
 def detalle(request, uuid):
     institucion = get_object_or_404(Institucion.objects.annotate(total_usuarios=Count("asignaciones_usuario")), uuid=uuid)
     eventos = EventoAuditoria.objects.filter(institucion=institucion).select_related("usuario")[:10]
-    return render(request, "instituciones/detalle.html", {"institucion": institucion, "eventos": eventos})
+    asignaciones = institucion.asignaciones_usuario.select_related("usuario")
+    return render(request, "instituciones/detalle.html", {"institucion": institucion, "eventos": eventos, "asignaciones": asignaciones})
 
 
-@institucion_required
+@superusuario_required
+def editar(request, uuid):
+    institucion = get_object_or_404(Institucion, uuid=uuid)
+    form = InstitucionCrearForm(request.POST or None, request.FILES or None, instance=institucion)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        evento = registrar_evento(request, "ACTUALIZAR", institucion)
+        evento.institucion = institucion
+        evento.save(update_fields=("institucion",))
+        messages.success(request, "Institución actualizada correctamente.")
+        return redirect("instituciones:detalle", uuid=uuid)
+    return render(request, "instituciones/formulario.html", {"form": form, "institucion": institucion})
+
+
+@superusuario_required
+def cambiar_estado(request, uuid):
+    if request.method != "POST":
+        return redirect("instituciones:detalle", uuid=uuid)
+    institucion = get_object_or_404(Institucion, uuid=uuid)
+    institucion.activa = not institucion.activa
+    institucion.save(update_fields=("activa",))
+    evento = registrar_evento(request, "ACTIVAR" if institucion.activa else "DESACTIVAR", institucion)
+    evento.institucion = institucion
+    evento.save(update_fields=("institucion",))
+    messages.success(request, f"Institución {'activada' if institucion.activa else 'desactivada'} correctamente.")
+    return redirect("instituciones:detalle", uuid=uuid)
+
+
+@administrador_institucion_required
 def usuarios(request):
     asignaciones = UsuarioInstitucion.objects.filter(institucion=request.institucion).select_related("usuario")
     q = request.GET.get("q", "")
@@ -69,7 +103,7 @@ def usuarios(request):
     return render(request, "instituciones/usuarios/lista.html", {"asignaciones": asignaciones, "roles": UsuarioInstitucion.Rol.choices, "q": q})
 
 
-@institucion_required
+@administrador_institucion_required
 @transaction.atomic
 def usuario_crear(request):
     form = UsuarioInstitucionCrearForm(request.POST or None)
@@ -86,12 +120,12 @@ def _asignacion(request, pk):
     return get_object_or_404(UsuarioInstitucion.objects.select_related("usuario", "institucion"), pk=pk, institucion=request.institucion)
 
 
-@institucion_required
+@administrador_institucion_required
 def usuario_detalle(request, pk):
     return render(request, "instituciones/usuarios/detalle.html", {"asignacion": _asignacion(request, pk)})
 
 
-@institucion_required
+@administrador_institucion_required
 @transaction.atomic
 def usuario_editar(request, pk):
     asignacion = _asignacion(request, pk)
@@ -105,3 +139,27 @@ def usuario_editar(request, pk):
         messages.success(request, "Usuario actualizado correctamente.")
         return redirect("instituciones:usuario_detalle", pk=asignacion.pk)
     return render(request, "instituciones/usuarios/formulario.html", {"form": form, "titulo": "Editar usuario", "asignacion": asignacion})
+
+
+@administrador_institucion_required
+def usuario_estado(request, pk):
+    asignacion = _asignacion(request, pk)
+    if request.method == "POST":
+        asignacion.activo = not asignacion.activo
+        asignacion.save(update_fields=("activo",))
+        registrar_evento(request, "ACTIVAR" if asignacion.activo else "DESACTIVAR", asignacion)
+        messages.success(request, f"Usuario {'activado' if asignacion.activo else 'desactivado'} correctamente.")
+    return redirect("instituciones:usuario_detalle", pk=pk)
+
+
+@administrador_institucion_required
+@transaction.atomic
+def usuario_password(request, pk):
+    asignacion = _asignacion(request, pk)
+    form = AulaProSetPasswordForm(asignacion.usuario, request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        registrar_evento(request, "RESTABLECER_PASSWORD", asignacion)
+        messages.success(request, "Contraseña restablecida correctamente.")
+        return redirect("instituciones:usuario_detalle", pk=pk)
+    return render(request, "instituciones/usuarios/password.html", {"form": form, "asignacion": asignacion})

@@ -35,3 +35,10 @@ document.addEventListener("click", event => {
     document.getElementById("apLoadingBar")?.classList.add("loading");
   }
 });
+
+document.querySelectorAll(".toast").forEach(element => bootstrap.Toast.getOrCreateInstance(element).show());
+document.getElementById("confirmModal")?.addEventListener("show.bs.modal", event => {
+  const trigger = event.relatedTarget;
+  document.getElementById("confirmModalForm").action = trigger.dataset.confirmUrl;
+  document.getElementById("confirmModalTitle").textContent = trigger.dataset.confirmTitle || "Confirmar acción";
+});

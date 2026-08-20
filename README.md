@@ -10,6 +10,7 @@ AulaPro es una plataforma SaaS multiinstitución para la administración académ
 - Usuario personalizado (`cuentas.Usuario`) definido desde la primera migración.
 - Apps enfocadas: `core`, `cuentas`, `instituciones`, `auditoria` y la preparación vacía de `catalogos`.
 - Interfaz independiente del Django Admin, que se conserva para operación técnica.
+- Catálogo académico global versionado, separado por completo de la futura oferta académica de cada institución.
 
 ## Estrategia multiinstitución
 
@@ -83,6 +84,12 @@ python manage.py makemigrations --check --dry-run
 ```
 
 Las pruebas cubren autenticación, separación del panel global, unicidad de asignaciones y aislamiento multiinstitución, incluida la manipulación de la clave de sesión.
+
+## Catálogo académico global
+
+Los superusuarios acceden a `/catalogos/carreras/` para administrar niveles, tipos de carrera, carreras, áreas, cursos y versiones históricas de pensum. Ninguno de estos modelos contiene `institucion_id`: representan referencias globales que las instituciones podrán seleccionar en una etapa posterior.
+
+Una carrera posee múltiples versiones; cada versión contiene grados y `CursoPensum` relaciona un curso reutilizable con un grado concreto, su orden, períodos semanales y obligatoriedad. Las versiones pueden duplicarse de forma atómica sin duplicar `CursoCatalogo`. La estrategia de fuentes oficiales e importación futura está documentada en `catalogos/README.md`.
 
 ## Producción
 

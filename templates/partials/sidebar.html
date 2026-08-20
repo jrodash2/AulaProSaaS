@@ -5,7 +5,14 @@
     <a class="nav-item {% if request.resolver_match.url_name == 'global_dashboard' %}active{% endif %}" href="{% url 'core:global_dashboard' %}"><i class="bi bi-grid-1x2"></i><span class="nav-label">Inicio</span></a>
     <a class="nav-item" href="/admin/instituciones/institucion/"><i class="bi bi-buildings"></i><span class="nav-label">Instituciones</span></a>
     <a class="nav-item" href="/admin/cuentas/usuario/"><i class="bi bi-people"></i><span class="nav-label">Usuarios</span></a>
-    <span class="nav-item disabled"><i class="bi bi-journal-text"></i><span class="nav-label">Catálogos</span></span>
+    <button class="nav-item submenu-toggle" data-bs-toggle="collapse" data-bs-target="#catalogosGlobal"><i class="bi bi-journal-text"></i><span class="nav-label">Catálogos</span><i class="bi bi-chevron-down ms-auto nav-label"></i></button>
+    <div class="collapse submenu {% if request.resolver_match.app_name == 'catalogos' %}show{% endif %}" id="catalogosGlobal">
+      <a href="{% url 'catalogos:referencia_lista' tipo='niveles' %}">Niveles</a>
+      <a href="{% url 'catalogos:referencia_lista' tipo='tipos-carrera' %}">Tipos de carrera</a>
+      <a href="{% url 'catalogos:carrera_lista' %}">Carreras</a>
+      <a href="{% url 'catalogos:referencia_lista' tipo='cursos' %}">Cursos</a>
+      <a href="{% url 'catalogos:referencia_lista' tipo='areas' %}">Áreas curriculares</a>
+    </div>
     <a class="nav-item" href="/admin/auditoria/eventoauditoria/"><i class="bi bi-shield-check"></i><span class="nav-label">Auditoría</span></a>
     <a class="nav-item" href="/admin/"><i class="bi bi-gear"></i><span class="nav-label">Configuración</span></a>
   {% else %}

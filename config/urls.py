@@ -8,10 +8,18 @@ from cuentas.forms import AulaProAuthenticationForm
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("login/", auth_views.LoginView.as_view(template_name="registration/login.html", authentication_form=AulaProAuthenticationForm), name="login"),
+    path(
+        "login/",
+        auth_views.LoginView.as_view(
+            template_name="registration/login.html",
+            authentication_form=AulaProAuthenticationForm,
+        ),
+        name="login",
+    ),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("", include("core.urls")),
     path("institucion/", include("instituciones.urls")),
+    path("catalogos/", include("catalogos.urls")),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

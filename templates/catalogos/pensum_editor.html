@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}{{ pensum.nombre }} · AulaPro{% endblock %}
+{% block breadcrumb %}Catálogos / Carreras / {{ pensum.carrera.nombre }} / {{ pensum.nombre }}{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">{{ pensum.carrera.nombre }}</p><h1>{{ pensum.nombre }}</h1><p>{{ pensum.codigo_version }} · <span class="status status-{{ pensum.estado|lower }}">{{ pensum.get_estado_display }}</span></p></div><div class="heading-actions"><a class="btn btn-outline-primary" href="{% url 'catalogos:pensum_duplicar' pensum.uuid %}"><i class="bi bi-copy"></i> Duplicar</a><a class="btn btn-primary" href="{% url 'catalogos:grado_crear' pensum.uuid %}"><i class="bi bi-plus-lg"></i> Crear grado</a></div></div>
+<div class="pensum-layout">
+{% for grado in pensum.grados.all %}
+  <section class="panel grade-panel">
+    <div class="panel-heading"><div><span class="grade-order">{{ grado.numero_orden }}</span><h2>{{ grado.nombre }}</h2></div><div class="heading-actions"><a class="btn btn-sm btn-light" href="{% url 'catalogos:grado_editar' pensum.uuid grado.pk %}"><i class="bi bi-pencil"></i> Editar grado</a><a class="btn btn-sm btn-primary" href="{% url 'catalogos:curso_pensum_agregar' pensum.uuid %}?grado={{ grado.pk }}"><i class="bi bi-plus-lg"></i> Agregar curso</a></div></div>
+    <div class="course-list">{% for item in grado.cursos_pensum.all %}{% if item.activo %}<article><span class="course-order">{{ item.orden }}</span><div><strong>{{ item.curso.nombre }}</strong><small>{{ item.curso.codigo_interno }}{% if item.obligatorio %} · Obligatorio{% endif %}</small></div><span class="period-count">{% if item.periodos_semanales %}{{ item.periodos_semanales }} períodos{% else %}Sin períodos{% endif %}</span><div class="table-actions"><a href="{% url 'catalogos:curso_pensum_editar' pensum.uuid item.pk %}" title="Editar"><i class="bi bi-pencil"></i></a><form method="post" action="{% url 'catalogos:curso_pensum_quitar' pensum.uuid item.pk %}">{% csrf_token %}<button title="Quitar" aria-label="Quitar curso"><i class="bi bi-x-lg"></i></button></form></div></article>{% endif %}{% empty %}<div class="empty-state">Este grado todavía no tiene cursos.</div>{% endfor %}</div>
+  </section>
+{% empty %}<section class="panel empty-state"><i class="bi bi-journal-plus fs-1"></i><h2>Construye esta versión</h2><p>Comienza creando el primer grado del pensum.</p><a class="btn btn-primary" href="{% url 'catalogos:grado_crear' pensum.uuid %}">Crear grado</a></section>{% endfor %}
+</div>
+{% endblock %}

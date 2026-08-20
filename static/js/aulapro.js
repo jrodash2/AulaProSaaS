@@ -27,3 +27,57 @@
     event.currentTarget.innerHTML = input.type === "password" ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
   });
 })();
+
+document.addEventListener("DOMContentLoaded", () => document.getElementById("apLoadingBar")?.classList.add("done"));
+document.addEventListener("click", event => {
+  const link = event.target.closest("a[href]");
+  if (link && link.origin === location.origin && !link.hash && !event.ctrlKey && !event.metaKey) {
+    document.getElementById("apLoadingBar")?.classList.add("loading");
+  }
+});
+
+document.querySelectorAll(".toast").forEach(element => bootstrap.Toast.getOrCreateInstance(element).show());
+document.getElementById("confirmModal")?.addEventListener("show.bs.modal", event => {
+  const trigger = event.relatedTarget;
+  document.getElementById("confirmModalForm").action = trigger.dataset.confirmUrl;
+  document.getElementById("confirmModalTitle").textContent = trigger.dataset.confirmTitle || "Confirmar acción";
+});
+
+if (window.AulaProOfertaOpciones) {
+  const nivel = document.getElementById("id_nivel");
+  const carrera = document.getElementById("id_carrera");
+  const pensum = document.getElementById("id_pensum");
+  const cargar = async (select, parametro, valor, etiqueta) => {
+    select.disabled = true;
+    const response = await fetch(`${window.AulaProOfertaOpciones}?${parametro}=${encodeURIComponent(valor)}`);
+    const data = await response.json();
+    select.innerHTML = `<option value="">${etiqueta}</option>` + data.resultados.map(item => `<option value="${item.id}">${item.nombre}${item.codigo_version ? ` · ${item.codigo_version} · ${item.estado}` : ""}</option>`).join("");
+    select.disabled = false;
+  };
+  nivel?.addEventListener("change", () => cargar(carrera, "nivel", nivel.value, "Seleccione una carrera"));
+  carrera?.addEventListener("change", () => cargar(pensum, "carrera", carrera.value, "Seleccione una versión de pensum"));
+}
+
+if (window.AulaProCuiUrl) {
+  const cui = document.getElementById("id_alumno-cui");
+  const feedback = document.getElementById("cuiFeedback");
+  cui?.addEventListener("blur", async () => {
+    if (!cui.value) { feedback.textContent = "Se registrará con identificación pendiente."; return; }
+    const response = await fetch(`${window.AulaProCuiUrl}?cui=${encodeURIComponent(cui.value)}`);
+    const data = await response.json();
+    feedback.innerHTML = data.disponible ? '<span class="text-success">✓ CUI disponible</span>' : `Este alumno ya está registrado: <a href="${data.alumno.url}">${data.alumno.nombre}</a>`;
+  });
+}
+
+if (window.AulaProInscripcionOpciones) {
+  const chain = [
+    ["id_inscripcion-ciclo", "id_inscripcion-oferta_academica", "ciclo", "Seleccione oferta"],
+    ["id_inscripcion-oferta_academica", "id_inscripcion-grado", "oferta", "Seleccione grado"],
+    ["id_inscripcion-grado", "id_inscripcion-seccion", "grado", "Seleccione sección"],
+  ];
+  chain.forEach(([sourceId, targetId, key, label]) => document.getElementById(sourceId)?.addEventListener("change", async event => {
+    const target = document.getElementById(targetId); target.disabled = true;
+    const response = await fetch(`${window.AulaProInscripcionOpciones}?${key}=${encodeURIComponent(event.target.value)}`);
+    const data = await response.json(); target.innerHTML = `<option value="">${label}</option>` + data.resultados.map(x => `<option value="${x.id}">${x.nombre}</option>`).join(""); target.disabled = false;
+  }));
+}

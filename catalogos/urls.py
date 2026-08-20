@@ -4,9 +4,11 @@ from . import views
 
 app_name = "catalogos"
 urlpatterns = [
+    path("", views.landing, name="landing"),
     path("carreras/", views.carrera_lista, name="carrera_lista"),
     path("carreras/nueva/", views.carrera_formulario, name="carrera_crear"),
     path("carreras/<uuid:uuid>/", views.carrera_detalle, name="carrera_detalle"),
+    path("carreras/<uuid:uuid>/estado/", views.carrera_estado, name="carrera_estado"),
     path(
         "carreras/<uuid:uuid>/editar/", views.carrera_formulario, name="carrera_editar"
     ),
@@ -32,6 +34,7 @@ urlpatterns = [
         views.grado_formulario,
         name="grado_editar",
     ),
+    path("pensum/<uuid:pensum_uuid>/grados/<int:pk>/estado/", views.grado_estado, name="grado_estado"),
     path(
         "pensum/<uuid:pensum_uuid>/cursos/agregar/",
         views.curso_pensum_formulario,
@@ -49,6 +52,8 @@ urlpatterns = [
     ),
     path("<slug:tipo>/", views.referencia_lista, name="referencia_lista"),
     path("<slug:tipo>/nuevo/", views.referencia_formulario, name="referencia_crear"),
+    path("<slug:tipo>/<int:pk>/", views.referencia_detalle, name="referencia_detalle"),
+    path("<slug:tipo>/<int:pk>/estado/", views.referencia_estado, name="referencia_estado"),
     path(
         "<slug:tipo>/<int:pk>/editar/",
         views.referencia_formulario,

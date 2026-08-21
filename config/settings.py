@@ -40,6 +40,9 @@ INSTALLED_APPS = [
     "instituciones",
     "catalogos",
     "auditoria",
+    "academico",
+    "alumnos",
+    "docentes",
 ]
 
 MIDDLEWARE = [
@@ -103,9 +106,9 @@ elif DB_NAME:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": aulapro,
-            "USER": os.getenv("postgres", ""),
-            "PASSWORD": os.getenv("Jrodash2#", ""),
+            "NAME": DB_NAME,
+            "USER": os.getenv("DB_USER", ""),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
             "HOST": os.getenv("DB_HOST", "localhost"),
             "PORT": os.getenv("DB_PORT", "5432"),
             "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60" if not DEBUG else "0")),

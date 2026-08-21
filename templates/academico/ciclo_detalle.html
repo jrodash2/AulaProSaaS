@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ ciclo.nombre }} · AulaPro{% endblock %}
+{% block breadcrumb %}Académico / Ciclos escolares / {{ ciclo.nombre }}{% endblock %}
+{% block content %}
+{% url "academico:ciclo_editar" ciclo.pk as editar %}
+{% include "components/page_header.html" with eyebrow="Ciclo escolar" title=ciclo.nombre description="Resumen operativo del periodo académico." action_url=editar action_label="Editar ciclo" %}
+<div class="metric-grid four"><article class="metric"><strong>{{ ofertas|length }}</strong><span>Ofertas</span></article><article class="metric"><strong>{{ total_grados }}</strong><span>Grados</span></article><article class="metric"><strong>{{ total_secciones }}</strong><span>Secciones</span></article><article class="metric"><strong>{{ total_inscripciones }}</strong><span>Inscripciones</span></article></div>
+<div class="detail-layout"><section class="panel"><h2>Información</h2><dl class="detail-grid"><div><dt>Año</dt><dd>{{ ciclo.anio }}</dd></div><div><dt>Periodo</dt><dd>{{ ciclo.fecha_inicio|date:"d/m/Y" }} – {{ ciclo.fecha_fin|date:"d/m/Y" }}</dd></div><div><dt>Estado</dt><dd>{% include "components/status_badge.html" with active=ciclo.activo %}</dd></div><div><dt>Ciclo actual</dt><dd>{{ ciclo.es_actual|yesno:"Sí,No" }}</dd></div><div><dt>Cerrado</dt><dd>{{ ciclo.cerrado|yesno:"Sí,No" }}</dd></div></dl></section><section class="panel"><h2>Oferta académica</h2>{% for oferta in ofertas %}<p><a href="{% url 'academico:oferta_detalle' oferta.pk %}">{{ oferta.nombre_mostrado }}</a> · {{ oferta.nivel.nombre }}</p>{% empty %}<p class="text-muted">No hay ofertas asociadas.</p>{% endfor %}</section></div>
+<section class="panel mt-3"><h2>Actividad reciente</h2>{% for evento in actividad %}<p>{{ evento.fecha|date:"d/m/Y H:i" }} · {{ evento.accion }}</p>{% empty %}<p class="text-muted">No hay actividad registrada para este ciclo.</p>{% endfor %}</section>
+{% endblock %}

@@ -82,6 +82,11 @@ def asignaciones(request):
  if request.GET.get("estado") in ("1","0"): qs=qs.filter(activa=request.GET["estado"]=="1")
  return render(request,"docentes/asignaciones.html",{"items":qs,"ciclo":ciclo,"ciclos":CicloEscolar.objects.filter(institucion=request.institucion),"docentes":_docentes(request),"ofertas":OfertaAcademica.objects.filter(institucion=request.institucion,ciclo=ciclo) if ciclo else []})
 
+@lectura_docentes_required
+def asignacion_detalle(request,pk):
+ item=get_object_or_404(request.institucion.asignaciones_docentes.select_related("docente","ciclo","oferta_academica","grado","seccion","curso"),pk=pk)
+ return render(request,"docentes/asignacion_detalle.html",{"item":item})
+
 @administrador_institucion_required
 def asignacion_form(request,pk=None):
  obj=get_object_or_404(request.institucion.asignaciones_docentes,pk=pk) if pk else None; form=AsignacionForm(request.POST or None,instance=obj,institucion=request.institucion); form.instance.institucion=request.institucion

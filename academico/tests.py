@@ -41,6 +41,11 @@ class AcademicoBase(TestCase):
 
 
 class CicloEscolarTests(AcademicoBase):
+    def test_detalle_ciclo_y_aislamiento(self):
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get(reverse("academico:ciclo_detalle", args=[self.ciclo_a.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("academico:ciclo_detalle", args=[self.ciclo_b.pk])).status_code, 404)
+
     def test_institucion_a_no_ve_ciclos_b(self):
         self.client.force_login(self.admin)
         response = self.client.get(reverse("academico:ciclos"))
@@ -69,6 +74,29 @@ class CicloEscolarTests(AcademicoBase):
     def test_fechas_invalidas_rechazadas(self):
         with self.assertRaises(ValidationError):
             CicloEscolar.objects.create(institucion=self.a, nombre="Inválido", anio=2029, fecha_inicio=date(2029, 10, 1), fecha_fin=date(2029, 1, 1))
+
+
+class DetallesAcademicosTests(AcademicoBase):
+    def setUp(self):
+        super().setUp()
+        self.oferta = self.crear_oferta()
+        self.grado = self.oferta.grados.first()
+        self.curso = self.grado.cursos.first()
+        self.jornada = JornadaInstitucion.objects.create(institucion=self.a, codigo="MAT", nombre="Matutina")
+        self.seccion = Seccion.objects.create(institucion=self.a, ciclo=self.ciclo_a, grado=self.grado, jornada=self.jornada, codigo="A", nombre="A")
+        self.client.force_login(self.admin)
+
+    def test_detalles_principales_responden(self):
+        for name, pk in (("jornada_detalle", self.jornada.pk), ("grado_detalle", self.grado.pk), ("seccion_detalle", self.seccion.pk), ("curso_detalle", self.curso.pk)):
+            self.assertEqual(self.client.get(reverse(f"academico:{name}", args=[pk])).status_code, 200)
+
+    def test_detalles_externos_son_404(self):
+        jornada = JornadaInstitucion.objects.create(institucion=self.b, codigo="MAT", nombre="Matutina B")
+        oferta = self.crear_oferta(institucion=self.b, ciclo=self.ciclo_b)
+        grado = oferta.grados.first(); curso = grado.cursos.first()
+        seccion = Seccion.objects.create(institucion=self.b, ciclo=self.ciclo_b, grado=grado, jornada=jornada, codigo="B", nombre="B")
+        for name, pk in (("jornada_detalle", jornada.pk), ("grado_detalle", grado.pk), ("seccion_detalle", seccion.pk), ("curso_detalle", curso.pk)):
+            self.assertEqual(self.client.get(reverse(f"academico:{name}", args=[pk])).status_code, 404)
 
 
 class OfertaAcademicaTests(AcademicoBase):

@@ -52,6 +52,23 @@ def ciclos_lista(request):
     return render(request, "academico/ciclos_lista.html", {"ciclos": _ciclos(request)})
 
 
+@institucion_required
+def ciclo_detalle(request, pk):
+    from alumnos.models import Inscripcion
+    from auditoria.models import EventoAuditoria
+
+    ciclo = get_object_or_404(_ciclos(request), pk=pk)
+    ofertas = ciclo.ofertas.filter(institucion=request.institucion).select_related("nivel")
+    return render(request, "academico/ciclo_detalle.html", {
+        "ciclo": ciclo,
+        "ofertas": ofertas,
+        "total_grados": ciclo.grados.filter(institucion=request.institucion).count(),
+        "total_secciones": Seccion.objects.filter(institucion=request.institucion, ciclo=ciclo).count(),
+        "total_inscripciones": Inscripcion.objects.filter(institucion=request.institucion, ciclo=ciclo).count(),
+        "actividad": EventoAuditoria.objects.filter(institucion=request.institucion, modelo=ciclo._meta.label, objeto_id=str(ciclo.pk))[:10],
+    })
+
+
 @administrador_institucion_required
 def ciclo_formulario(request, pk=None):
     ciclo = get_object_or_404(_ciclos(request), pk=pk) if pk else None
@@ -83,6 +100,13 @@ def ciclo_actual(request, pk):
 @institucion_required
 def jornadas_lista(request):
     return render(request, "academico/jornadas_lista.html", {"jornadas": request.institucion.jornadas.all()})
+
+
+@institucion_required
+def jornada_detalle(request, pk):
+    jornada = get_object_or_404(request.institucion.jornadas, pk=pk)
+    secciones = jornada.secciones.filter(institucion=request.institucion).select_related("grado", "ciclo")
+    return render(request, "academico/jornada_detalle.html", {"jornada": jornada, "secciones": secciones})
 
 
 @administrador_institucion_required
@@ -168,6 +192,31 @@ def grados_secciones(request):
     return render(request, "academico/grados_secciones.html", {"ciclo": ciclo, "ciclos": ciclos, "grados": grados})
 
 
+@institucion_required
+def grado_detalle(request, pk):
+    grado = get_object_or_404(GradoInstitucion.objects.select_related("ciclo", "oferta"), pk=pk, institucion=request.institucion)
+    return render(request, "academico/grado_detalle.html", {
+        "grado": grado,
+        "secciones": grado.secciones.filter(institucion=request.institucion).select_related("jornada"),
+        "cursos": grado.cursos.filter(institucion=request.institucion).select_related("curso_catalogo"),
+    })
+
+
+@institucion_required
+def seccion_detalle(request, pk):
+    from alumnos.models import Inscripcion
+    from docentes.models import AsignacionGuia
+
+    seccion = get_object_or_404(Seccion.objects.select_related("ciclo", "grado__oferta", "jornada"), pk=pk, institucion=request.institucion)
+    asignaciones = seccion.asignaciones_docentes.filter(institucion=request.institucion, activa=True).select_related("curso", "docente")
+    return render(request, "academico/seccion_detalle.html", {
+        "seccion": seccion,
+        "guia": AsignacionGuia.objects.filter(institucion=request.institucion, seccion=seccion, activa=True).select_related("docente").first(),
+        "asignaciones": asignaciones,
+        "estudiantes": Inscripcion.objects.filter(institucion=request.institucion, seccion=seccion, estado="ACTIVA").select_related("alumno"),
+    })
+
+
 @administrador_institucion_required
 def seccion_formulario(request, grado_pk=None, pk=None):
     ciclo, ciclos = _ciclo_seleccionado(request, requerido=True); _verificar_abierto(ciclo)
@@ -201,6 +250,13 @@ def cursos_lista(request):
     if request.GET.get("origen"): cursos = cursos.filter(origen=request.GET["origen"])
     if request.GET.get("estado") in {"1", "0"}: cursos = cursos.filter(activo=request.GET["estado"] == "1")
     return render(request, "academico/cursos_lista.html", {"ciclo": ciclo, "ciclos": ciclos, "cursos": cursos, "ofertas": ciclo.ofertas.filter(institucion=request.institucion) if ciclo else [], "grados": ciclo.grados.filter(institucion=request.institucion) if ciclo else [], "origenes": CursoInstitucion.Origen.choices})
+
+
+@institucion_required
+def curso_detalle(request, pk):
+    curso = get_object_or_404(CursoInstitucion.objects.select_related("ciclo", "oferta", "grado", "curso_catalogo"), pk=pk, institucion=request.institucion)
+    asignaciones = curso.asignaciones_docentes.filter(institucion=request.institucion).select_related("docente", "seccion")
+    return render(request, "academico/curso_detalle.html", {"curso": curso, "asignaciones": asignaciones})
 
 
 @administrador_institucion_required

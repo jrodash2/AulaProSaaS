@@ -58,6 +58,9 @@ class AlumnoTests(Base):
   self.client.force_login(self.users["ADMINISTRADOR"]); datos=self.client.get(reverse("alumnos:opciones_inscripcion"),{"ciclo":self.cb.pk}).json(); self.assertEqual(datos["resultados"],[])
 
 class InscripcionTests(Base):
+ def test_detalle_inscripcion_y_aislamiento(self):
+  alumno=self.alumno(); item=self.inscribir(a=alumno); externo=self.alumno(self.b,cui="4444444444444"); otro=self.inscribir(a=externo,ciclo=self.cb,oferta=self.ob,grado=self.gb,seccion=self.sb)
+  self.client.force_login(self.users["ADMINISTRADOR"]); self.assertEqual(self.client.get(reverse("alumnos:inscripcion_detalle",args=[item.pk])).status_code,200); self.assertEqual(self.client.get(reverse("alumnos:inscripcion_detalle",args=[otro.pk])).status_code,404)
  def test_rechaza_ciclo_otra_institucion(self):
   with self.assertRaises(ValidationError): self.inscribir(self.alumno(),self.cb,self.oa,self.ga,self.sa)
  def test_rechaza_grado_otra_oferta(self):

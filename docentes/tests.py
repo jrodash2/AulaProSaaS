@@ -46,6 +46,8 @@ class DocenteTests(Base):
   d=self.docente(); u=crear_acceso_docente(d,{"username":"nuevo-prof","email":"p@x.com","password":"Una-clave-segura-2027"}); self.assertTrue(UsuarioInstitucion.objects.filter(usuario=u,institucion=self.a,rol="DOCENTE").exists())
 
 class AsignacionTests(Base):
+ def test_detalle_asignacion_y_aislamiento(self):
+  propia=self.asignar(); ajena=AsignacionDocente.objects.create(institucion=self.b,ciclo=self.cb,docente=self.db,oferta_academica=self.ob,grado=self.gb,seccion=self.sb,curso=self.curso_b,fecha_inicio=date(2027,1,1)); self.client.force_login(self.admin); self.assertEqual(self.client.get(reverse("docentes:asignacion_detalle",args=[propia.pk])).status_code,200); self.assertEqual(self.client.get(reverse("docentes:asignacion_detalle",args=[ajena.pk])).status_code,404)
  def test_docente_misma_institucion(self):
   with self.assertRaises(ValidationError): self.asignar(docente=self.db)
  def test_ciclo_misma_institucion(self):
@@ -73,6 +75,8 @@ class AsignacionTests(Base):
   AsignacionDocente.objects.create(institucion=self.b,ciclo=self.cb,docente=self.db,oferta_academica=self.ob,grado=self.gb,seccion=self.sb,curso=self.curso_b,fecha_inicio=date(2027,1,1)); self.client.force_login(self.admin); self.assertNotContains(self.client.get(reverse("docentes:asignaciones")),self.db.nombre_completo)
 
 class GuiaPortalTests(Base):
+ def test_sidebar_docente_no_muestra_administracion(self):
+  self.client.force_login(self.ua); response=self.client.get(reverse("core:institucion_dashboard")); self.assertContains(response,"Mis clases"); self.assertNotContains(response,"Configuración</span>"); self.assertNotContains(response,"Usuarios</span>")
  def test_guia_misma_institucion(self): AsignacionGuia.objects.create(institucion=self.a,ciclo=self.ca,seccion=self.sa,docente=self.da,fecha_inicio=date(2027,1,1))
  def test_guia_externo_rechazado(self):
   with self.assertRaises(ValidationError): AsignacionGuia.objects.create(institucion=self.a,ciclo=self.ca,seccion=self.sa,docente=self.db,fecha_inicio=date(2027,1,1))

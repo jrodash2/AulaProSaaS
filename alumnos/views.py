@@ -114,6 +114,10 @@ def inscripciones(request):
     for key in ("ciclo","oferta_academica","grado","seccion","estado"):
         if request.GET.get(key): qs=qs.filter(**{key:request.GET[key]})
     return render(request,"alumnos/inscripciones.html",{"inscripciones":qs,"ciclos":CicloEscolar.objects.filter(institucion=request.institucion),"estados":Inscripcion.Estado.choices})
+@institucion_required
+def inscripcion_detalle(request,pk):
+    inscripcion=get_object_or_404(request.institucion.inscripciones.select_related("alumno","ciclo","oferta_academica","grado","seccion"),pk=pk)
+    return render(request,"alumnos/inscripcion_detalle.html",{"inscripcion":inscripcion})
 @gestion_alumnos_required
 def inscripcion_form(request,alumno_pk,pk=None):
     alumno=get_object_or_404(_alumnos(request),pk=alumno_pk); obj=get_object_or_404(request.institucion.inscripciones,pk=pk,alumno=alumno) if pk else None; form=InscripcionForm(request.POST or None,instance=obj,institucion=request.institucion); form.instance.institucion=request.institucion; form.instance.alumno=alumno

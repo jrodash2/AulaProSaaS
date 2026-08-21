@@ -17,7 +17,7 @@ from .forms import InstitucionCrearForm, InstitucionForm
 from .models import Institucion, UsuarioInstitucion
 
 
-@institucion_required
+@administrador_institucion_required
 def configuracion(request):
     institucion = request.institucion
     if request.method == "POST":

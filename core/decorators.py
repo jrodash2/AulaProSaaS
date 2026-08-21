@@ -50,3 +50,13 @@ def gestion_alumnos_required(view):
             raise PermissionDenied
         return view(request, *args, **kwargs)
     return wrapped
+
+
+def lectura_docentes_required(view):
+    @institucion_required
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        if request.asignacion_institucion.rol not in {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA"}:
+            raise PermissionDenied
+        return view(request, *args, **kwargs)
+    return wrapped

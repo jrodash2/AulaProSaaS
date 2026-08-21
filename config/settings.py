@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "auditoria",
     "academico",
     "alumnos",
+    "docentes",
 ]
 
 MIDDLEWARE = [

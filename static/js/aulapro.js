@@ -81,3 +81,17 @@ if (window.AulaProInscripcionOpciones) {
     const data = await response.json(); target.innerHTML = `<option value="">${label}</option>` + data.resultados.map(x => `<option value="${x.id}">${x.nombre}</option>`).join(""); target.disabled = false;
   }));
 }
+
+if (window.AulaProDocenteOpciones) {
+  const chain = [
+    ["id_ciclo", "id_oferta_academica", "ciclo", "Seleccione oferta"],
+    ["id_oferta_academica", "id_grado", "oferta", "Seleccione grado"],
+    ["id_grado", "id_seccion", "grado", "Seleccione sección", "secciones"],
+    ["id_grado", "id_curso", "grado", "Seleccione curso", "cursos"],
+  ];
+  chain.forEach(([sourceId,targetId,key,label,tipo]) => document.getElementById(sourceId)?.addEventListener("change", async event => {
+    const target=document.getElementById(targetId); target.disabled=true;
+    const response=await fetch(`${window.AulaProDocenteOpciones}?${key}=${encodeURIComponent(event.target.value)}${tipo ? `&tipo=${tipo}` : ""}`);
+    const data=await response.json(); target.innerHTML=`<option value="">${label}</option>`+data.resultados.map(x=>`<option value="${x.id}">${x.nombre}</option>`).join(""); target.disabled=false;
+  }));
+}

@@ -34,12 +34,20 @@ def global_dashboard(request):
 def institucion_dashboard(request):
     from academico.models import CicloEscolar, JornadaInstitucion, OfertaAcademica
     ciclo = CicloEscolar.objects.filter(institucion=request.institucion, es_actual=True).first()
+    if request.asignacion_institucion.rol == "DOCENTE":
+        from docentes.models import Docente
+        docente = Docente.objects.filter(institucion=request.institucion, usuario=request.user).first()
+        clases = docente.asignaciones.filter(ciclo=ciclo, activa=True).select_related("curso", "grado", "seccion") if docente and ciclo else []
+        return render(request, "docentes/dashboard.html", {"docente": docente, "ciclo_actual": ciclo, "clases": clases})
     from alumnos.models import Alumno, Inscripcion
+    from docentes.models import Docente
     context = {
         "ciclo_actual": ciclo,
         "total_alumnos_activos": Alumno.objects.filter(institucion=request.institucion, estado=Alumno.Estado.ACTIVO).count(),
         "inscripciones_actuales": Inscripcion.objects.filter(institucion=request.institucion, ciclo=ciclo, estado=Inscripcion.Estado.ACTIVA).count() if ciclo else 0,
         "tiene_estudiantes": Alumno.objects.filter(institucion=request.institucion).exists(),
+        "total_docentes_activos": Docente.objects.filter(institucion=request.institucion, estado=Docente.Estado.ACTIVO).count(),
+        "tiene_docentes": Docente.objects.filter(institucion=request.institucion, estado=Docente.Estado.ACTIVO).exists(),
         "tiene_ciclo": CicloEscolar.objects.filter(institucion=request.institucion).exists(),
         "tiene_oferta": OfertaAcademica.objects.filter(institucion=request.institucion, activa=True).exists(),
         "tiene_jornadas": JornadaInstitucion.objects.filter(institucion=request.institucion, activa=True).exists(),

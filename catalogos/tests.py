@@ -233,3 +233,23 @@ class CatalogoSeguridadVistasTests(TestCase):
         )
         self.assertEqual(evento.accion, "ACTUALIZAR")
         self.assertIsNone(evento.institucion)
+
+    def test_referencias_tienen_lista_detalle_crear_editar_y_estado(self):
+        self.client.force_login(self.superusuario)
+        for tipo in ("niveles", "tipos-carrera", "areas", "cursos"):
+            with self.subTest(tipo=tipo):
+                self.assertEqual(self.client.get(reverse("catalogos:referencia_lista", args=[tipo])).status_code, 200)
+                self.assertEqual(self.client.get(reverse("catalogos:referencia_crear", args=[tipo])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("catalogos:referencia_detalle", args=["niveles", self.nivel.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("catalogos:referencia_editar", args=["niveles", self.nivel.pk])).status_code, 200)
+        response = self.client.post(reverse("catalogos:referencia_estado", args=["niveles", self.nivel.pk]))
+        self.assertRedirects(response, reverse("catalogos:referencia_detalle", args=["niveles", self.nivel.pk]))
+        self.nivel.refresh_from_db()
+        self.assertFalse(self.nivel.activo)
+
+    def test_carrera_se_desactiva_sin_eliminarse(self):
+        self.client.force_login(self.superusuario)
+        self.client.post(reverse("catalogos:carrera_estado", args=[self.carrera.uuid]))
+        self.carrera.refresh_from_db()
+        self.assertFalse(self.carrera.activa)
+        self.assertTrue(CarreraCatalogo.objects.filter(pk=self.carrera.pk).exists())

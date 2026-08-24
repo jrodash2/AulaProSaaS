@@ -13,7 +13,7 @@ class AulaProFormMixin:
             widget = field.widget
             if isinstance(widget, forms.RadioSelect):
                 continue
-            if isinstance(widget, forms.CheckboxInput):
+            if isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)):
                 css_class = "form-check-input"
             elif isinstance(widget, (forms.Select, forms.SelectMultiple)):
                 css_class = "form-select"

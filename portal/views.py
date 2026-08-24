@@ -18,10 +18,13 @@ from .services import resumen_alumno
 @portal_role_required("PADRE","ALUMNO")
 def dashboard(request):
     alumnos=list(alumnos_permitidos(request))
+    from comunicaciones.models import Notificacion
+    avisos=Notificacion.objects.filter(institucion=request.institucion,usuario=request.user,tipo_origen="COMUNICACION")[:3]
     if rol_portal(request)=="ALUMNO":
         if not alumnos: raise PermissionDenied
-        return render(request,"portal/alumno_dashboard.html",resumen_alumno(alumnos[0]))
-    return render(request,"portal/padre_dashboard.html",{"estudiantes":[resumen_alumno(a) for a in alumnos]})
+        context=resumen_alumno(alumnos[0]);context["avisos_recientes"]=avisos
+        return render(request,"portal/alumno_dashboard.html",context)
+    return render(request,"portal/padre_dashboard.html",{"estudiantes":[resumen_alumno(a) for a in alumnos],"avisos_recientes":avisos})
 
 @portal_role_required("PADRE")
 def seleccionar(request,pk):

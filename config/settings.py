@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "tareas",
     "finanzas",
     "portal",
+    "comunicaciones",
 ]
 
 MIDDLEWARE = [
@@ -75,6 +76,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.aulapro_context",
                 "portal.context_processors.portal_context",
+                "comunicaciones.context_processors.notificaciones_context",
             ],
         },
     }

@@ -16,7 +16,9 @@ def tareas_permitidas(r):
  if rol(r)=="DOCENTE":q=q.filter(asignacion_docente__in=asignaciones_usuario(r))
  return q
 def puede_editar(r,tarea):return rol(r) in GESTION or (rol(r)=="DOCENTE" and asignaciones_usuario(r).filter(pk=tarea.asignacion_docente_id).exists())
-def tarea_publicada(tarea):return None
+def tarea_publicada(tarea):
+ from comunicaciones.services import notificar_tarea
+ return notificar_tarea(tarea)
 @transaction.atomic
 def crear_tarea(request,asignacion,**datos):
  if not (rol(request) in GESTION or (rol(request)=="DOCENTE" and asignaciones_usuario(request).filter(pk=asignacion.pk).exists())):raise PermissionDenied

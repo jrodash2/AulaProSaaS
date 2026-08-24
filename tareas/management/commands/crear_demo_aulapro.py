@@ -12,6 +12,8 @@ from finanzas.services import config as config_financiera,registrar_pago
 from django.test import RequestFactory
 from tareas.models import Tarea
 from tareas.services import sincronizar_entregas_tarea
+from comunicaciones.models import Comunicacion,ComunicacionDestino,ComunicacionAudiencia
+from comunicaciones.services import sincronizar_notificaciones,notificar_tarea
 class Command(BaseCommand):
  help="Crea un entorno demo idempotente por roles, incluyendo tareas."
  def handle(self,*args,**opts):
@@ -37,6 +39,15 @@ class Command(BaseCommand):
   for al in alumnos[:2]: AlumnoEncargado.objects.get_or_create(institucion=inst,alumno=al,encargado=encargado,defaults={"parentesco":"MADRE","activo":True,"es_principal":True})
   if alumnos:
    alumnos[0].usuario=alumno_user;alumnos[0].save(update_fields=("usuario","fecha_actualizacion"))
+  comunicaciones_demo=(("Circular de reunión de padres","CIRCULAR","IMPORTANTE","PADRE",seccion,ahora),("Aviso para estudiantes","AVISO","NORMAL","ALUMNO",grado,ahora),("Aviso para docentes","AVISO","NORMAL","DOCENTE",seccion,ahora),("Aviso urgente institucional","ANUNCIO","URGENTE",None,None,ahora),("Actividades del próximo mes","RECORDATORIO","NORMAL","PADRE",seccion,ahora+timedelta(days=5)))
+  for titulo,tipo,prioridad,audiencia,destino,fecha in comunicaciones_demo:
+   estado="PROGRAMADA" if fecha>ahora else "PUBLICADA";com,_=Comunicacion.objects.get_or_create(institucion=inst,titulo=titulo,defaults={"contenido":"Comunicación demostrativa de AulaPro para validar el centro de notificaciones.","resumen":"Información importante para la comunidad educativa.","tipo":tipo,"prioridad":prioridad,"estado":estado,"fecha_publicacion":fecha,"creada_por":users["ADMINISTRADOR"],"publicada_por":users["ADMINISTRADOR"]})
+   if audiencia:ComunicacionAudiencia.objects.get_or_create(comunicacion=com,rol=audiencia)
+   if destino:
+    tipo_destino="GRADO" if destino==grado else "SECCION";ComunicacionDestino.objects.get_or_create(institucion=inst,comunicacion=com,tipo_destino=tipo_destino,defaults={tipo_destino.lower():destino,"ciclo":ciclo})
+   else:ComunicacionDestino.objects.get_or_create(institucion=inst,comunicacion=com,tipo_destino="INSTITUCION")
+   if estado=="PUBLICADA":sincronizar_notificaciones(com)
+  for t in Tarea.objects.filter(institucion=inst,estado="PUBLICADA"):notificar_tarea(t)
   for al in alumnos:
    ins=al.inscripciones.filter(ciclo=ciclo).first()
    for concepto,periodo,monto,vence in ((inscripcion,"2026-I",400,date(2026,1,15)),(colegiatura,"2026-07",500,date(2026,7,10)),(colegiatura,"2026-08",500,date(2026,8,10))):Cargo.objects.get_or_create(institucion=inst,alumno=al,concepto=concepto,periodo_referencia=periodo,defaults={"familia":al.familia,"ciclo":ciclo,"inscripcion":ins,"descripcion":f"{concepto.nombre} {periodo}","fecha_emision":date(2026,1,1) if concepto==inscripcion else vence.replace(day=1),"fecha_vencimiento":vence,"monto_original":monto,"monto_total":monto,"creado_por":users["CONTABILIDAD"]})
@@ -45,4 +56,4 @@ class Command(BaseCommand):
    cs=list(Cargo.objects.filter(institucion=inst,alumno=alumnos[0]));registrar_pago(req,alumno=alumnos[0],monto=sum(c.saldo for c in cs),metodo_pago=efectivo,referencia="DEMO-PAGO-1",aplicaciones={c.pk:c.saldo for c in cs})
   if len(alumnos)>1 and not Pago.objects.filter(institucion=inst,referencia="DEMO-PAGO-2").exists():
    c=Cargo.objects.filter(institucion=inst,alumno=alumnos[1],concepto=colegiatura).order_by("fecha_vencimiento").first();registrar_pago(req,alumno=alumnos[1],monto=200,metodo_pago=efectivo,referencia="DEMO-PAGO-2",aplicaciones={c.pk:200})
-  self.stdout.write(self.style.SUCCESS("Demo AulaPro creado/actualizado con portal familiar, tareas y finanzas por roles."))
+  self.stdout.write(self.style.SUCCESS("Demo AulaPro creado/actualizado con portal familiar, comunicación, tareas y finanzas por roles."))

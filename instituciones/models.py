@@ -43,6 +43,8 @@ class UsuarioInstitucion(models.Model):
         SECRETARIA = "SECRETARIA", "Secretaría"
         CONTABILIDAD = "CONTABILIDAD", "Contabilidad"
         DOCENTE = "DOCENTE", "Docente"
+        PADRE = "PADRE", "Padre / encargado"
+        ALUMNO = "ALUMNO", "Alumno"
 
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="asignaciones_institucion")
     institucion = models.ForeignKey(Institucion, on_delete=models.CASCADE, related_name="asignaciones_usuario")

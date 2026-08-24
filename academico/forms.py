@@ -6,18 +6,7 @@ from catalogos.models import CarreraCatalogo, CursoCatalogo, NivelEducativo, Ver
 from .models import CicloEscolar, CursoInstitucion, JornadaInstitucion, Seccion
 
 
-class AulaProFormMixin:
-    def aplicar_estilos(self):
-        for field in self.fields.values():
-            if isinstance(field.widget, forms.CheckboxInput):
-                css = "form-check-input"
-            elif isinstance(field.widget, forms.Select):
-                css = "form-select"
-            else:
-                css = "form-control"
-            field.widget.attrs.setdefault("class", css)
-
-
+from core.forms import AulaProFormMixin
 class CicloEscolarForm(AulaProFormMixin, forms.ModelForm):
     class Meta:
         model = CicloEscolar

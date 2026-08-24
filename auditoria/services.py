@@ -6,7 +6,7 @@ def obtener_ip(request):
     return forwarded.split(",")[0].strip() if forwarded else request.META.get("REMOTE_ADDR")
 
 
-def registrar_evento(request, accion, objeto):
+def registrar_evento(request, accion, objeto, detalles=None):
     return EventoAuditoria.objects.create(
         usuario=request.user if request.user.is_authenticated else None,
         institucion=getattr(request, "institucion", None),
@@ -14,4 +14,5 @@ def registrar_evento(request, accion, objeto):
         modelo=objeto._meta.label,
         objeto_id=str(objeto.pk),
         ip=obtener_ip(request),
+        detalles=detalles or {},
     )

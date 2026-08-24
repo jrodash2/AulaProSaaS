@@ -43,6 +43,10 @@ INSTALLED_APPS = [
     "academico",
     "alumnos",
     "docentes",
+    "asistencia",
+    "calificaciones",
+    "tareas",
+    "finanzas",
 ]
 
 MIDDLEWARE = [

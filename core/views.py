@@ -36,9 +36,12 @@ def institucion_dashboard(request):
     ciclo = CicloEscolar.objects.filter(institucion=request.institucion, es_actual=True).first()
     if request.asignacion_institucion.rol == "DOCENTE":
         from docentes.models import Docente
+        from tareas.models import Tarea
+        from django.utils import timezone
         docente = Docente.objects.filter(institucion=request.institucion, usuario=request.user).first()
         clases = docente.asignaciones.filter(ciclo=ciclo, activa=True).select_related("curso", "grado", "seccion") if docente and ciclo else []
-        return render(request, "docentes/dashboard.html", {"docente": docente, "ciclo_actual": ciclo, "clases": clases})
+        tareas_proximas = Tarea.objects.filter(institucion=request.institucion, asignacion_docente__docente=docente, estado=Tarea.Estado.PUBLICADA, fecha_limite__gte=timezone.now()).select_related("curso", "seccion").order_by("fecha_limite")[:5] if docente else []
+        return render(request, "docentes/dashboard.html", {"docente": docente, "ciclo_actual": ciclo, "clases": clases, "tareas_proximas": tareas_proximas})
     from alumnos.models import Alumno, Inscripcion
     from docentes.models import Docente
     from asistencia.models import RegistroAsistencia, SesionAsistencia

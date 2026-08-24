@@ -1,0 +1,3 @@
+from django.contrib import admin
+from .models import Comunicacion,ComunicacionDestino,ComunicacionAudiencia,AdjuntoComunicacion,Notificacion
+admin.site.register((Comunicacion,ComunicacionDestino,ComunicacionAudiencia,AdjuntoComunicacion,Notificacion))

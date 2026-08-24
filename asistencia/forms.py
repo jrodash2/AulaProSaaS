@@ -1,9 +1,10 @@
+from core.forms import AulaProFormMixin
 from django import forms
 from django.utils import timezone
 from academico.models import CicloEscolar, CursoInstitucion, GradoInstitucion, OfertaAcademica, Seccion
 from .models import SesionAsistencia
 
-class SesionForm(forms.Form):
+class SesionForm(AulaProFormMixin, forms.Form):
     ciclo = forms.ModelChoiceField(CicloEscolar.objects.none())
     oferta = forms.ModelChoiceField(OfertaAcademica.objects.none(), label="Oferta académica")
     grado = forms.ModelChoiceField(GradoInstitucion.objects.none())

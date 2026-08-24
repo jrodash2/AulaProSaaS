@@ -1,3 +1,4 @@
+from core.forms import AulaProFormMixin
 from django import forms
 from django.contrib.auth.forms import (
     AuthenticationForm,
@@ -11,7 +12,7 @@ from instituciones.models import UsuarioInstitucion
 from .models import Usuario
 
 
-class AulaProAuthenticationForm(AuthenticationForm):
+class AulaProAuthenticationForm(AulaProFormMixin, AuthenticationForm):
     username = forms.CharField(widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Usuario", "autofocus": True}))
     password = forms.CharField(widget=forms.PasswordInput(attrs={"class": "form-control", "placeholder": "Contraseña"}))
     remember_me = forms.BooleanField(required=False, label="Recordarme")
@@ -28,7 +29,7 @@ class AulaProAuthenticationForm(AuthenticationForm):
         return user
 
 
-class PerfilForm(forms.ModelForm):
+class PerfilForm(AulaProFormMixin, forms.ModelForm):
     class Meta:
         model = Usuario
         fields = ("first_name", "last_name", "email")
@@ -39,7 +40,7 @@ class PerfilForm(forms.ModelForm):
             field.widget.attrs["class"] = "form-control"
 
 
-class UsuarioInstitucionCrearForm(UserCreationForm):
+class UsuarioInstitucionCrearForm(AulaProFormMixin, UserCreationForm):
     rol = forms.ChoiceField(choices=UsuarioInstitucion.Rol.choices)
 
     class Meta:
@@ -52,7 +53,7 @@ class UsuarioInstitucionCrearForm(UserCreationForm):
             field.widget.attrs["class"] = "form-select" if isinstance(field.widget, forms.Select) else "form-control"
 
 
-class UsuarioInstitucionEditarForm(forms.ModelForm):
+class UsuarioInstitucionEditarForm(AulaProFormMixin, forms.ModelForm):
     rol = forms.ChoiceField(choices=UsuarioInstitucion.Rol.choices)
     activo = forms.BooleanField(required=False)
 
@@ -69,14 +70,14 @@ class UsuarioInstitucionEditarForm(forms.ModelForm):
             field.widget.attrs["class"] = "form-check-input" if isinstance(field.widget, forms.CheckboxInput) else "form-select" if isinstance(field.widget, forms.Select) else "form-control"
 
 
-class AulaProPasswordChangeForm(PasswordChangeForm):
+class AulaProPasswordChangeForm(AulaProFormMixin, PasswordChangeForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs["class"] = "form-control"
 
 
-class AulaProSetPasswordForm(SetPasswordForm):
+class AulaProSetPasswordForm(AulaProFormMixin, SetPasswordForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():

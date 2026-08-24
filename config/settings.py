@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "calificaciones",
     "tareas",
     "finanzas",
+    "portal",
 ]
 
 MIDDLEWARE = [
@@ -73,6 +74,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.aulapro_context",
+                "portal.context_processors.portal_context",
             ],
         },
     }

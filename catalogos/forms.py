@@ -1,3 +1,4 @@
+from core.forms import AulaProFormMixin
 from django import forms
 
 from .models import (
@@ -12,7 +13,7 @@ from .models import (
 )
 
 
-class AulaProModelForm(forms.ModelForm):
+class AulaProModelForm(AulaProFormMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
@@ -111,7 +112,7 @@ class VersionPensumForm(AulaProModelForm):
         }
 
 
-class DuplicarPensumForm(forms.Form):
+class DuplicarPensumForm(AulaProFormMixin, forms.Form):
     codigo_version = forms.CharField(max_length=50, label="Código de nueva versión")
     nombre = forms.CharField(max_length=160, label="Nombre de nueva versión")
     fecha_inicio_vigencia = forms.DateField(

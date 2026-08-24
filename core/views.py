@@ -34,6 +34,8 @@ def global_dashboard(request):
 def institucion_dashboard(request):
     from academico.models import CicloEscolar, JornadaInstitucion, OfertaAcademica
     ciclo = CicloEscolar.objects.filter(institucion=request.institucion, es_actual=True).first()
+    if request.asignacion_institucion.rol in {"PADRE", "ALUMNO"}:
+        return redirect("portal:dashboard")
     if request.asignacion_institucion.rol == "DOCENTE":
         from docentes.models import Docente
         from tareas.models import Tarea

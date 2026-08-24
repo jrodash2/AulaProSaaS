@@ -1,3 +1,4 @@
+from core.forms import AulaProFormMixin
 from django import forms
 from calificaciones.models import ActividadEvaluacion
 from .models import Tarea
@@ -6,7 +7,7 @@ class MultipleFileInput(forms.ClearableFileInput):
 class MultipleFileField(forms.FileField):
  def __init__(self,*a,**kw):kw.setdefault("widget",MultipleFileInput());super().__init__(*a,**kw)
  def clean(self,data,initial=None):return [super(MultipleFileField,self).clean(x,initial) for x in (data if isinstance(data,(list,tuple)) else [data])] if data else []
-class TareaForm(forms.ModelForm):
+class TareaForm(AulaProFormMixin, forms.ModelForm):
  publicar_ahora=forms.BooleanField(required=False)
  archivos=MultipleFileField(required=False,widget=MultipleFileInput(attrs={"accept":".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"}))
  class Meta:model=Tarea;fields=("asignacion_docente","actividad_evaluacion","titulo","descripcion","instrucciones","fecha_publicacion","fecha_limite","permite_entrega_archivo");widgets={"fecha_publicacion":forms.DateTimeInput(attrs={"type":"datetime-local"}),"fecha_limite":forms.DateTimeInput(attrs={"type":"datetime-local"})}

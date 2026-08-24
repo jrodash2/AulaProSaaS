@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "asistencia",
     "calificaciones",
     "tareas",
+    "finanzas",
 ]
 
 MIDDLEWARE = [

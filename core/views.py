@@ -45,10 +45,16 @@ def institucion_dashboard(request):
     from alumnos.models import Alumno, Inscripcion
     from docentes.models import Docente
     from asistencia.models import RegistroAsistencia, SesionAsistencia
+    from finanzas.models import Cargo, Pago
+    from decimal import Decimal
+    from django.db.models import Sum
     from django.utils import timezone
     registros_hoy = RegistroAsistencia.objects.filter(institucion=request.institucion, sesion__fecha=timezone.localdate(), sesion__tipo=SesionAsistencia.Tipo.GENERAL).exclude(sesion__estado=SesionAsistencia.Estado.ANULADA).exclude(estado=RegistroAsistencia.Estado.SIN_MARCAR)
     total_asistencia_hoy = registros_hoy.count()
     asistieron_hoy = registros_hoy.filter(estado__in=(RegistroAsistencia.Estado.PRESENTE, RegistroAsistencia.Estado.TARDE)).count()
+    hoy = timezone.localdate()
+    ingresos_mes = Pago.objects.filter(institucion=request.institucion, estado=Pago.Estado.CONFIRMADO, fecha_pago__year=hoy.year, fecha_pago__month=hoy.month).aggregate(total=Sum("monto"))["total"] or Decimal("0")
+    cuentas_por_cobrar = sum((cargo.saldo for cargo in Cargo.objects.filter(institucion=request.institucion).exclude(estado=Cargo.Estado.ANULADO)), Decimal("0"))
     context = {
         "ciclo_actual": ciclo,
         "total_alumnos_activos": Alumno.objects.filter(institucion=request.institucion, estado=Alumno.Estado.ACTIVO).count(),
@@ -61,6 +67,8 @@ def institucion_dashboard(request):
         "tiene_jornadas": JornadaInstitucion.objects.filter(institucion=request.institucion, activa=True).exists(),
         "tiene_usuarios": request.institucion.asignaciones_usuario.filter(activo=True).exists(),
         "asistencia_hoy": round(asistieron_hoy * 100 / total_asistencia_hoy, 1) if total_asistencia_hoy else None,
+        "ingresos_mes": ingresos_mes,
+        "cuentas_por_cobrar": cuentas_por_cobrar,
     }
     return render(request, "core/institucion_dashboard.html", context)
 

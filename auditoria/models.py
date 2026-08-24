@@ -10,6 +10,7 @@ class EventoAuditoria(models.Model):
     objeto_id = models.CharField(max_length=64, blank=True)
     fecha = models.DateTimeField(auto_now_add=True, db_index=True)
     ip = models.GenericIPAddressField(null=True, blank=True)
+    detalles = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ("-fecha",)

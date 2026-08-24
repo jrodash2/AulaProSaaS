@@ -2,6 +2,7 @@ from datetime import date
 from io import BytesIO
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from openpyxl import Workbook
@@ -28,7 +29,7 @@ class Base(TestCase):
  def xlsx(self,rows):
   wb=Workbook(); ws=wb.active; ws.title="ESTUDIANTES"; ws.append(HEADERS)
   for r in rows: ws.append([r.get(h) for h in HEADERS])
-  out=BytesIO(); wb.save(out); out.seek(0); out.name="test.xlsx"; return out
+  out=BytesIO(); wb.save(out); return SimpleUploadedFile("test.xlsx",out.getvalue(),content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
  def row(self,cui="9999999999999",grado="G1",seccion="A"):
   return {"CUI":cui,"PRIMER_NOMBRE":"Juan","PRIMER_APELLIDO":"Pérez","FECHA_NACIMIENTO":date(2015,2,1),"SEXO":"M","CODIGO_OFERTA":"BAS","CODIGO_GRADO":grado,"CODIGO_SECCION":seccion}
 

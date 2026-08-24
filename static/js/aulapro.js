@@ -95,3 +95,9 @@ if (window.AulaProDocenteOpciones) {
     const data=await response.json(); target.innerHTML=`<option value="">${label}</option>`+data.resultados.map(x=>`<option value="${x.id}">${x.nombre}</option>`).join(""); target.disabled=false;
   }));
 }
+
+if(window.AulaProAttendance){
+ const form=document.getElementById('attendanceForm'), rows=[...document.querySelectorAll('.attendance-row')], total=window.AulaProAttendance.total;
+ const refresh=()=>{const done=rows.filter(r=>r.querySelector('input:checked')?.value!=='SIN_MARCAR').length,pending=total-done,pct=total?Math.round(done*100/total):0;document.getElementById('progressCopy').textContent=`${done} / ${total} registrados`;document.getElementById('pendingCopy').textContent=`${pending} pendientes`;document.getElementById('stickyProgress').textContent=`${done} de ${total} registrados`;document.getElementById('attendanceProgress').style.width=`${pct}%`;document.getElementById('closeAttendance').disabled=pending>0};
+ form?.addEventListener('change',refresh);document.getElementById('markAll')?.addEventListener('click',()=>{rows.forEach(r=>{const x=r.querySelector('input[value="PRESENTE"]');if(x&&!x.disabled)x.checked=true});refresh()});document.getElementById('studentSearch')?.addEventListener('input',e=>rows.forEach(r=>r.hidden=!r.dataset.search.includes(e.target.value.toLowerCase())));refresh();
+}

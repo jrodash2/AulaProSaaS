@@ -41,6 +41,11 @@ def institucion_dashboard(request):
         return render(request, "docentes/dashboard.html", {"docente": docente, "ciclo_actual": ciclo, "clases": clases})
     from alumnos.models import Alumno, Inscripcion
     from docentes.models import Docente
+    from asistencia.models import RegistroAsistencia, SesionAsistencia
+    from django.utils import timezone
+    registros_hoy = RegistroAsistencia.objects.filter(institucion=request.institucion, sesion__fecha=timezone.localdate(), sesion__tipo=SesionAsistencia.Tipo.GENERAL).exclude(sesion__estado=SesionAsistencia.Estado.ANULADA).exclude(estado=RegistroAsistencia.Estado.SIN_MARCAR)
+    total_asistencia_hoy = registros_hoy.count()
+    asistieron_hoy = registros_hoy.filter(estado__in=(RegistroAsistencia.Estado.PRESENTE, RegistroAsistencia.Estado.TARDE)).count()
     context = {
         "ciclo_actual": ciclo,
         "total_alumnos_activos": Alumno.objects.filter(institucion=request.institucion, estado=Alumno.Estado.ACTIVO).count(),
@@ -52,6 +57,7 @@ def institucion_dashboard(request):
         "tiene_oferta": OfertaAcademica.objects.filter(institucion=request.institucion, activa=True).exists(),
         "tiene_jornadas": JornadaInstitucion.objects.filter(institucion=request.institucion, activa=True).exists(),
         "tiene_usuarios": request.institucion.asignaciones_usuario.filter(activo=True).exists(),
+        "asistencia_hoy": round(asistieron_hoy * 100 / total_asistencia_hoy, 1) if total_asistencia_hoy else None,
     }
     return render(request, "core/institucion_dashboard.html", context)
 

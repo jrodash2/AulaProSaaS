@@ -1,9 +1,10 @@
+from core.forms import AulaProFormMixin
 from django import forms
 
 from .models import Institucion
 
 
-class InstitucionForm(forms.ModelForm):
+class InstitucionForm(AulaProFormMixin, forms.ModelForm):
     class Meta:
         model = Institucion
         fields = ("nombre", "nombre_corto", "direccion", "departamento", "municipio", "telefono", "email", "sitio_web", "logo_principal", "logo_secundario", "color_primario", "color_secundario")

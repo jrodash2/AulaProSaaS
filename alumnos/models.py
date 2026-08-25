@@ -51,6 +51,7 @@ class Alumno(models.Model):
         OTRO = "O", "Otro / no especificado"
 
     institucion = models.ForeignKey("instituciones.Institucion", on_delete=models.CASCADE, related_name="alumnos")
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="perfil_alumno")
     familia = models.ForeignKey(Familia, null=True, blank=True, on_delete=models.SET_NULL, related_name="alumnos")
     cui = models.CharField(max_length=13, null=True, blank=True, validators=[cui_validator])
     estado_identificacion = models.CharField(max_length=12, choices=EstadoIdentificacion.choices, default=EstadoIdentificacion.PENDIENTE)
@@ -99,6 +100,7 @@ class Alumno(models.Model):
 
 class Encargado(models.Model):
     institucion = models.ForeignKey("instituciones.Institucion", on_delete=models.CASCADE, related_name="encargados")
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="perfil_encargado")
     cui = models.CharField(max_length=13, null=True, blank=True, validators=[cui_validator])
     nombres = models.CharField(max_length=160)
     apellidos = models.CharField(max_length=160)

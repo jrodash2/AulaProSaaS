@@ -1,3 +1,4 @@
+from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Count, Q
@@ -77,6 +78,7 @@ def editar(request, uuid):
 
 
 @superusuario_required
+@require_POST
 def cambiar_estado(request, uuid):
     if request.method != "POST":
         return redirect("instituciones:detalle", uuid=uuid)
@@ -142,6 +144,7 @@ def usuario_editar(request, pk):
 
 
 @administrador_institucion_required
+@require_POST
 def usuario_estado(request, pk):
     asignacion = _asignacion(request, pk)
     if request.method == "POST":

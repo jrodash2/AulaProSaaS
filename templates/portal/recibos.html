@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<h1>Recibos · {{ alumno.nombre_completo }}</h1>{% include 'portal/_nav.html' %}<div class="panel">{% for p in pagos %}<p><a href="{% url 'portal:recibo' alumno.pk p.pk %}">{{ p.recibo_numero }}</a> · Q {{ p.monto }} · {{ p.fecha_pago|date:'d/m/Y' }}</p>{% empty %}<p>Sin recibos confirmados.</p>{% endfor %}</div>{% endblock %}

@@ -51,6 +51,7 @@ class Alumno(models.Model):
         OTRO = "O", "Otro / no especificado"
 
     institucion = models.ForeignKey("instituciones.Institucion", on_delete=models.CASCADE, related_name="alumnos")
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="perfil_alumno")
     familia = models.ForeignKey(Familia, null=True, blank=True, on_delete=models.SET_NULL, related_name="alumnos")
     cui = models.CharField(max_length=13, null=True, blank=True, validators=[cui_validator])
     estado_identificacion = models.CharField(max_length=12, choices=EstadoIdentificacion.choices, default=EstadoIdentificacion.PENDIENTE)
@@ -99,6 +100,7 @@ class Alumno(models.Model):
 
 class Encargado(models.Model):
     institucion = models.ForeignKey("instituciones.Institucion", on_delete=models.CASCADE, related_name="encargados")
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="perfil_encargado")
     cui = models.CharField(max_length=13, null=True, blank=True, validators=[cui_validator])
     nombres = models.CharField(max_length=160)
     apellidos = models.CharField(max_length=160)
@@ -176,7 +178,15 @@ class Inscripcion(models.Model):
         if self.seccion_id and (self.seccion.institucion_id != self.institucion_id or self.seccion.ciclo_id != self.ciclo_id or self.seccion.grado_id != self.grado_id): errors["seccion"]="La sección no corresponde al grado."
         if self.estado == self.Estado.RETIRADA and (not self.fecha_retiro or not self.motivo_retiro): errors["motivo_retiro"]="Indique fecha y motivo del retiro."
         if errors: raise ValidationError(errors)
-    def save(self,*args,**kwargs): self.full_clean(); return super().save(*args,**kwargs)
+    def save(self,*args,**kwargs):
+        with transaction.atomic():
+            from instituciones.models import Institucion
+            Institucion.objects.select_for_update().get(pk=self.institucion_id)
+            activa_nueva=self.estado==self.Estado.ACTIVA and (not self.pk or not type(self).objects.filter(pk=self.pk,estado=self.Estado.ACTIVA).exists())
+            if activa_nueva:
+                from suscripciones.services import validar_cupo_alumnos
+                validar_cupo_alumnos(self.institucion,1)
+            self.full_clean(); return super().save(*args,**kwargs)
 
 
 class ImportacionAlumnos(models.Model):

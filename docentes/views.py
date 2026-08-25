@@ -1,3 +1,4 @@
+from django.views.decorators.http import require_POST
 from io import BytesIO
 from django.contrib import messages
 from django.db import transaction
@@ -67,6 +68,7 @@ def crear_acceso(request,pk):
  return render(request,"docentes/formulario.html",{"form":form,"titulo":"Crear acceso al sistema","docente":docente})
 
 @administrador_institucion_required
+@require_POST
 def acceso_estado(request,pk):
  docente=get_object_or_404(_docentes(request).exclude(usuario=None),pk=pk)
  if request.method=="POST":
@@ -94,6 +96,7 @@ def asignacion_form(request,pk=None):
  return render(request,"docentes/asignacion_form.html",{"form":form,"titulo":"Editar asignación" if obj else "Nueva asignación"})
 
 @administrador_institucion_required
+@require_POST
 def asignacion_estado(request,pk):
  item=get_object_or_404(request.institucion.asignaciones_docentes,pk=pk)
  if request.method=="POST": item.activa=not item.activa; item.fecha_fin=None if item.activa else timezone.localdate(); item.save(); registrar_evento(request,"EDITAR_ASIGNACION_DOCENTE" if item.activa else "FINALIZAR_ASIGNACION_DOCENTE",item)

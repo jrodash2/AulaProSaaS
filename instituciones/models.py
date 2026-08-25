@@ -2,7 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.core.validators import FileExtensionValidator, RegexValidator
-from django.db import models
+from django.db import models, transaction
 
 
 color_validator = RegexValidator(r"^#[0-9A-Fa-f]{6}$", "Use un color hexadecimal, por ejemplo #1F4E5F.")
@@ -43,6 +43,8 @@ class UsuarioInstitucion(models.Model):
         SECRETARIA = "SECRETARIA", "Secretaría"
         CONTABILIDAD = "CONTABILIDAD", "Contabilidad"
         DOCENTE = "DOCENTE", "Docente"
+        PADRE = "PADRE", "Padre / encargado"
+        ALUMNO = "ALUMNO", "Alumno"
 
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="asignaciones_institucion")
     institucion = models.ForeignKey(Institucion, on_delete=models.CASCADE, related_name="asignaciones_usuario")
@@ -57,3 +59,41 @@ class UsuarioInstitucion(models.Model):
 
     def __str__(self):
         return f"{self.usuario} · {self.institucion}"
+
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            Institucion.objects.select_for_update().get(pk=self.institucion_id)
+            consume = self.activo and self.rol not in (self.Rol.PADRE, self.Rol.ALUMNO)
+            antes_consume = False
+            if self.pk:
+                anterior = type(self).objects.filter(pk=self.pk).values("activo", "rol").first()
+                antes_consume = bool(anterior and anterior["activo"] and anterior["rol"] not in (self.Rol.PADRE, self.Rol.ALUMNO))
+            if consume and not antes_consume:
+                from suscripciones.services import validar_cupo_usuarios
+                validar_cupo_usuarios(self.institucion, 1)
+            return super().save(*args, **kwargs)
+
+
+class OnboardingInstitucion(models.Model):
+    TOTAL_PASOS = 11
+    institucion = models.OneToOneField(Institucion, on_delete=models.CASCADE, related_name="onboarding")
+    paso_actual = models.PositiveSmallIntegerField(default=1)
+    completado = models.BooleanField(default=False)
+    omitido = models.BooleanField(default=False)
+    fecha_inicio = models.DateTimeField(auto_now_add=True)
+    fecha_completado = models.DateTimeField(null=True, blank=True)
+    actualizado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="onboardings_actualizados")
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "onboarding institucional"
+        verbose_name_plural = "onboardings institucionales"
+
+    def clean(self):
+        if not 1 <= self.paso_actual <= self.TOTAL_PASOS:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({"paso_actual": f"El paso debe estar entre 1 y {self.TOTAL_PASOS}."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)

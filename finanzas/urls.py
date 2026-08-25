@@ -1,0 +1,4 @@
+from django.urls import path
+from . import views
+app_name="finanzas"
+urlpatterns=[path("",views.dashboard,name="dashboard"),path("configuracion/",views.configuracion,name="configuracion"),path("conceptos/",views.conceptos,name="conceptos"),path("conceptos/nuevo/",views.concepto_form,name="concepto_nuevo"),path("cargos/",views.cargos,name="cargos"),path("cargos/nuevo/",views.cargo_form,name="cargo_nuevo"),path("cargos/generar/",views.generar,name="generar"),path("pagos/",views.pagos,name="pagos"),path("pagos/nuevo/",views.pago_form,name="pago_nuevo"),path("pagos/<int:pk>/",views.pago_detalle,name="pago_detalle"),path("pagos/<int:pk>/anular/",views.pago_anular,name="pago_anular"),path("alumnos/<int:pk>/",views.alumno_estado,name="alumno"),path("familias/<int:pk>/",views.familia_estado,name="familia"),path("reportes/",views.reportes,name="reportes"),path("exportar/<slug:tipo>/",views.exportar,name="exportar")]

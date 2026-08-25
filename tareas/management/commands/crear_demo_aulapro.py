@@ -1,0 +1,77 @@
+from datetime import date,timedelta
+from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand,CommandError
+from django.conf import settings
+from django.utils import timezone
+from academico.models import CicloEscolar,CursoInstitucion,GradoInstitucion,OfertaAcademica,Seccion
+from alumnos.models import Alumno,Inscripcion,Encargado,AlumnoEncargado
+from catalogos.models import NivelEducativo
+from docentes.models import AsignacionDocente,Docente
+from instituciones.models import Institucion,OnboardingInstitucion,UsuarioInstitucion
+from finanzas.models import Cargo,ConceptoCobro,MetodoPago,Pago
+from finanzas.services import config as config_financiera,registrar_pago
+from django.test import RequestFactory
+from tareas.models import Tarea
+from tareas.services import sincronizar_entregas_tarea
+from comunicaciones.models import Comunicacion,ComunicacionDestino,ComunicacionAudiencia
+from comunicaciones.services import sincronizar_notificaciones,notificar_tarea
+from asistencia.models import SesionAsistencia,RegistroAsistencia
+from calificaciones.models import PeriodoAcademico,TipoEvaluacion,ActividadEvaluacion,Calificacion
+from suscripciones.models import Suscripcion
+from suscripciones.services import crear_catalogo_inicial
+class Command(BaseCommand):
+ help="Crea un entorno demo idempotente por roles, incluyendo tareas."
+ def add_arguments(self,parser):
+  parser.add_argument("--allow-production-demo",action="store_true",help="Confirma explícitamente la creación de datos demo con DEBUG=False.")
+ def handle(self,*args,**opts):
+  if not settings.DEBUG and not opts["allow_production_demo"]:raise CommandError("Datos demo bloqueados con DEBUG=False. Use --allow-production-demo solo en un entorno controlado.")
+  inst,_=Institucion.objects.get_or_create(codigo="DEMO",defaults={"nombre":"Institución Demo AulaPro","nombre_corto":"AulaPro Demo"});U=get_user_model()
+  planes=crear_catalogo_inicial();Suscripcion.objects.get_or_create(institucion=inst,estado="ACTIVA",defaults={"plan":planes["CRECE"],"modalidad":"MENSUAL","fecha_inicio":date(2026,1,1),"fecha_fin":date(2027,1,1),"precio_acordado":planes["CRECE"].precio_mensual})
+  superadmin,_=U.objects.get_or_create(username="demo_superadmin",defaults={"is_staff":True,"is_superuser":True});superadmin.is_staff=True;superadmin.is_superuser=True;superadmin.set_password("AulaProDemo2026!");superadmin.save()
+  users={}
+  nombres={"ADMINISTRADOR":"admin","DIRECTOR":"director","DOCENTE":"docente","CONTABILIDAD":"contabilidad","SECRETARIA":"secretaria"}
+  for rol,sufijo in nombres.items():
+   u,_=U.objects.get_or_create(username="demo_"+sufijo);u.set_password("AulaProDemo2026!");u.save();UsuarioInstitucion.objects.get_or_create(usuario=u,institucion=inst,defaults={"rol":rol});users[rol]=u
+  ciclo,_=CicloEscolar.objects.get_or_create(institucion=inst,anio=2026,defaults={"nombre":"Ciclo 2026","fecha_inicio":date(2026,1,1),"fecha_fin":date(2026,11,30),"activo":True,"es_actual":True});nivel,_=NivelEducativo.objects.get_or_create(codigo="DEMO-BAS",defaults={"nombre":"Básico"});oferta,_=OfertaAcademica.objects.get_or_create(institucion=inst,ciclo=ciclo,codigo_interno="BAS",defaults={"nivel":nivel,"nombre_mostrado":"Nivel Básico","origen":"PERSONALIZADA"});grado,_=GradoInstitucion.objects.get_or_create(oferta=oferta,codigo="1B",defaults={"institucion":inst,"ciclo":ciclo,"nombre":"Primero Básico"});seccion,_=Seccion.objects.get_or_create(grado=grado,nombre="A",defaults={"institucion":inst,"ciclo":ciclo,"codigo":"A"});curso,_=CursoInstitucion.objects.get_or_create(grado=grado,nombre_personalizado="Matemática",defaults={"institucion":inst,"ciclo":ciclo,"oferta":oferta,"nombre_mostrado":"Matemática","origen":"INSTITUCIONAL"});doc,_=Docente.objects.get_or_create(institucion=inst,usuario=users["DOCENTE"],defaults={"primer_nombre":"Docente","primer_apellido":"Demo","telefono":"5555-0000","fecha_ingreso":date(2026,1,1)});asig,_=AsignacionDocente.objects.get_or_create(docente=doc,ciclo=ciclo,seccion=seccion,curso=curso,defaults={"institucion":inst,"oferta_academica":oferta,"grado":grado,"fecha_inicio":date(2026,1,1)})
+  for n in range(1,13):
+   al,_=Alumno.objects.get_or_create(institucion=inst,cui=f"1{n:012d}",defaults={"primer_nombre":f"Alumno {n}","primer_apellido":"Demo","fecha_nacimiento":date(2014,1,n),"sexo":"F" if n==1 else "M","fecha_ingreso":date(2026,1,1)});Inscripcion.objects.get_or_create(alumno=al,ciclo=ciclo,defaults={"institucion":inst,"oferta_academica":oferta,"grado":grado,"seccion":seccion,"fecha_inscripcion":date(2026,1,2)})
+  alumnos_demo=list(Alumno.objects.filter(institucion=inst).order_by("cui")[:12]);sesion,_=SesionAsistencia.objects.get_or_create(institucion=inst,fecha=date(2026,8,24),seccion=seccion,tipo="GENERAL",defaults={"ciclo":ciclo,"oferta_academica":oferta,"grado":grado,"estado":"CERRADA","creada_por":users["ADMINISTRADOR"],"cerrada_por":users["ADMINISTRADOR"],"fecha_cierre":timezone.now()})
+  for idx,al in enumerate(alumnos_demo):
+   ins=al.inscripciones.filter(ciclo=ciclo).first();RegistroAsistencia.objects.get_or_create(institucion=inst,sesion=sesion,alumno=al,defaults={"inscripcion":ins,"estado":"AUSENTE" if idx==3 else ("TARDE" if idx==2 else "PRESENTE"),"registrado_por":users["ADMINISTRADOR"]})
+  periodo,_=PeriodoAcademico.objects.get_or_create(institucion=inst,ciclo=ciclo,codigo="B1",defaults={"nombre":"Primer período","numero_orden":1,"fecha_inicio":date(2026,1,1),"fecha_fin":date(2026,3,31)})
+  tipo_eval,_=TipoEvaluacion.objects.get_or_create(institucion=inst,codigo="EX",defaults={"nombre":"Examen"});actividad,_=ActividadEvaluacion.objects.get_or_create(institucion=inst,periodo=periodo,asignacion_docente=asig,nombre="Evaluación demo",defaults={"ciclo":ciclo,"curso":curso,"grado":grado,"seccion":seccion,"tipo_evaluacion":tipo_eval,"fecha":date(2026,3,15),"punteo_maximo":100,"ponderacion":100,"creada_por":users["DOCENTE"]})
+  for idx,al in enumerate(alumnos_demo):
+   ins=al.inscripciones.filter(ciclo=ciclo).first();Calificacion.objects.get_or_create(institucion=inst,actividad=actividad,alumno=al,defaults={"inscripcion":ins,"estado":"CALIFICADO","punteo_obtenido":75+idx,"registrado_por":users["DOCENTE"]})
+  ahora=timezone.now();datos=(("Guía de ejercicios 3","PUBLICADA",ahora+timedelta(days=3)),("Investigación de geometría","BORRADOR",ahora+timedelta(days=10)),("Práctica para mañana","PUBLICADA",ahora+timedelta(days=1)))
+  for titulo,estado,limite in datos:
+   t,_=Tarea.objects.get_or_create(institucion=inst,asignacion_docente=asig,titulo=titulo,defaults={"ciclo":ciclo,"curso":curso,"grado":grado,"seccion":seccion,"descripcion":"Actividad demostrativa de AulaPro.","instrucciones":"Lee las instrucciones y completa la actividad.","fecha_publicacion":ahora,"fecha_limite":limite,"estado":estado,"creada_por":users["DOCENTE"]})
+   if t.estado=="PUBLICADA":
+    if titulo=="Guía de ejercicios 3" and not t.permite_entrega_archivo: t.permite_entrega_archivo=True;t.save(update_fields=("permite_entrega_archivo","fecha_actualizacion"))
+    sincronizar_entregas_tarea(t)
+  config_financiera(inst);efectivo,_=MetodoPago.objects.get_or_create(institucion=inst,codigo="EFECTIVO",defaults={"nombre":"Efectivo"});inscripcion,_=ConceptoCobro.objects.get_or_create(institucion=inst,codigo="INS",defaults={"nombre":"Inscripción","tipo_general":"INSCRIPCION","monto_predeterminado":400});colegiatura,_=ConceptoCobro.objects.get_or_create(institucion=inst,codigo="COL",defaults={"nombre":"Colegiatura","tipo_general":"MENSUALIDAD","monto_predeterminado":500,"recurrente":True})
+  alumnos=list(Alumno.objects.filter(institucion=inst).order_by("cui")[:12]);hoy=timezone.localdate()
+  padre,_=U.objects.get_or_create(username="demo_padre",defaults={"first_name":"María","last_name":"Demo"});padre.set_password("AulaProDemo2026!");padre.save();UsuarioInstitucion.objects.update_or_create(usuario=padre,institucion=inst,defaults={"rol":"PADRE","activo":True})
+  alumno_user,_=U.objects.get_or_create(username="demo_alumno",defaults={"first_name":"Alumno","last_name":"Demo"});alumno_user.set_password("AulaProDemo2026!");alumno_user.save();UsuarioInstitucion.objects.update_or_create(usuario=alumno_user,institucion=inst,defaults={"rol":"ALUMNO","activo":True})
+  encargado,_=Encargado.objects.get_or_create(institucion=inst,usuario=padre,defaults={"nombres":"María","apellidos":"Demo","telefono":"5555-1000","email":"padre@demo.aulapro"})
+  for al in alumnos[:2]: AlumnoEncargado.objects.get_or_create(institucion=inst,alumno=al,encargado=encargado,defaults={"parentesco":"MADRE","activo":True,"es_principal":True})
+  if alumnos:
+   alumnos[0].usuario=alumno_user;alumnos[0].save(update_fields=("usuario","fecha_actualizacion"))
+  comunicaciones_demo=(("Circular de reunión de padres","CIRCULAR","IMPORTANTE","PADRE",seccion,ahora),("Aviso para estudiantes","AVISO","NORMAL","ALUMNO",grado,ahora),("Aviso para docentes","AVISO","NORMAL","DOCENTE",seccion,ahora),("Aviso urgente institucional","ANUNCIO","URGENTE",None,None,ahora),("Actividades del próximo mes","RECORDATORIO","NORMAL","PADRE",seccion,ahora+timedelta(days=5)))
+  for titulo,tipo,prioridad,audiencia,destino,fecha in comunicaciones_demo:
+   estado="PROGRAMADA" if fecha>ahora else "PUBLICADA";com,_=Comunicacion.objects.get_or_create(institucion=inst,titulo=titulo,defaults={"contenido":"Comunicación demostrativa de AulaPro para validar el centro de notificaciones.","resumen":"Información importante para la comunidad educativa.","tipo":tipo,"prioridad":prioridad,"estado":estado,"fecha_publicacion":fecha,"creada_por":users["ADMINISTRADOR"],"publicada_por":users["ADMINISTRADOR"]})
+   if audiencia:ComunicacionAudiencia.objects.get_or_create(comunicacion=com,rol=audiencia)
+   if destino:
+    tipo_destino="GRADO" if destino==grado else "SECCION";ComunicacionDestino.objects.get_or_create(institucion=inst,comunicacion=com,tipo_destino=tipo_destino,defaults={tipo_destino.lower():destino,"ciclo":ciclo})
+   else:ComunicacionDestino.objects.get_or_create(institucion=inst,comunicacion=com,tipo_destino="INSTITUCION")
+   if estado=="PUBLICADA":sincronizar_notificaciones(com)
+  for t in Tarea.objects.filter(institucion=inst,estado="PUBLICADA"):notificar_tarea(t)
+  for al in alumnos:
+   ins=al.inscripciones.filter(ciclo=ciclo).first()
+   for concepto,periodo,monto,vence in ((inscripcion,"2026-I",400,date(2026,1,15)),(colegiatura,"2026-07",500,date(2026,7,10)),(colegiatura,"2026-08",500,date(2026,8,10))):Cargo.objects.get_or_create(institucion=inst,alumno=al,concepto=concepto,periodo_referencia=periodo,defaults={"familia":al.familia,"ciclo":ciclo,"inscripcion":ins,"descripcion":f"{concepto.nombre} {periodo}","fecha_emision":date(2026,1,1) if concepto==inscripcion else vence.replace(day=1),"fecha_vencimiento":vence,"monto_original":monto,"monto_total":monto,"creado_por":users["CONTABILIDAD"]})
+  req=RequestFactory().post("/");req.user=users["CONTABILIDAD"];req.institucion=inst;req.asignacion_institucion=UsuarioInstitucion.objects.get(usuario=req.user,institucion=inst);req.META["REMOTE_ADDR"]="127.0.0.1"
+  if alumnos and not Pago.objects.filter(institucion=inst,referencia="DEMO-PAGO-1").exists():
+   cs=list(Cargo.objects.filter(institucion=inst,alumno=alumnos[0]));registrar_pago(req,alumno=alumnos[0],monto=sum(c.saldo for c in cs),metodo_pago=efectivo,referencia="DEMO-PAGO-1",aplicaciones={c.pk:c.saldo for c in cs})
+  if len(alumnos)>1 and not Pago.objects.filter(institucion=inst,referencia="DEMO-PAGO-2").exists():
+   c=Cargo.objects.filter(institucion=inst,alumno=alumnos[1],concepto=colegiatura).order_by("fecha_vencimiento").first();registrar_pago(req,alumno=alumnos[1],monto=200,metodo_pago=efectivo,referencia="DEMO-PAGO-2",aplicaciones={c.pk:200})
+  onboarding,_=OnboardingInstitucion.objects.get_or_create(institucion=inst);onboarding.paso_actual=11;onboarding.completado=True;onboarding.omitido=False;onboarding.fecha_completado=timezone.now();onboarding.actualizado_por=users["ADMINISTRADOR"];onboarding.save()
+  self.stdout.write(self.style.SUCCESS("Demo AulaPro creado/actualizado con portal familiar, comunicación, tareas y finanzas por roles."))

@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "finanzas",
     "portal",
     "comunicaciones",
+    "reportes",
 ]
 
 MIDDLEWARE = [

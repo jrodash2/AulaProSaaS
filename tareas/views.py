@@ -9,12 +9,13 @@ from django.views.decorators.http import require_POST
 from openpyxl import Workbook
 from alumnos.models import Alumno,Inscripcion
 from core.decorators import institucion_required
+from core.permissions import LECTURA_ACADEMICA
 from .forms import TareaForm
 from .models import AdjuntoTarea,EntregaTarea,Tarea
 from .services import GESTION,agregar_adjunto,cambiar_estado,crear_tarea,editar_tarea,puede_editar,rol,sincronizar_entregas_tarea,tareas_permitidas
 
 def acceso(r):
- if rol(r)=="CONTABILIDAD":raise PermissionDenied
+ if rol(r) not in LECTURA_ACADEMICA:raise PermissionDenied
 def base_qs(r):return tareas_permitidas(r).select_related("ciclo","curso","grado","seccion","asignacion_docente__docente","creada_por")
 @institucion_required
 def dashboard(r):

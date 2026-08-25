@@ -1,3 +1,4 @@
+from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -88,6 +89,7 @@ def ciclo_formulario(request, pk=None):
 
 
 @administrador_institucion_required
+@require_POST
 def ciclo_actual(request, pk):
     ciclo = get_object_or_404(_ciclos(request), pk=pk, activo=True)
     if request.method == "POST":
@@ -123,6 +125,7 @@ def jornada_formulario(request, pk=None):
 
 
 @administrador_institucion_required
+@require_POST
 def jornada_estado(request, pk):
     jornada = get_object_or_404(request.institucion.jornadas, pk=pk)
     if request.method == "POST":
@@ -177,6 +180,7 @@ def oferta_detalle(request, pk):
 
 
 @administrador_institucion_required
+@require_POST
 def oferta_estado(request, pk):
     oferta = get_object_or_404(OfertaAcademica, pk=pk, institucion=request.institucion); _verificar_abierto(oferta.ciclo)
     if request.method == "POST":
@@ -234,6 +238,7 @@ def seccion_formulario(request, grado_pk=None, pk=None):
 
 
 @administrador_institucion_required
+@require_POST
 def seccion_estado(request, pk):
     seccion = get_object_or_404(Seccion, pk=pk, institucion=request.institucion); _verificar_abierto(seccion.ciclo)
     if request.method == "POST":
@@ -276,6 +281,7 @@ def curso_formulario(request, grado_pk, pk=None):
 
 
 @administrador_institucion_required
+@require_POST
 def curso_estado(request, pk):
     curso = get_object_or_404(CursoInstitucion.objects.select_related("ciclo"), pk=pk, institucion=request.institucion); _verificar_abierto(curso.ciclo)
     if request.method == "POST":

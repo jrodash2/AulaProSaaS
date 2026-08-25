@@ -61,4 +61,4 @@ class ArchivosTenantDemoTests(Base):
  def test_descarga_otro_tenant_404(self):
   t=self.tarea();a=AdjuntoTarea.objects.create(institucion=self.a,tarea=t,archivo=SimpleUploadedFile("x.pdf",b"%PDF",content_type="application/pdf"),nombre_original="x.pdf");self.client.force_login(self.u["ADMINISTRADOR"]);self.assertEqual(self.client.get(reverse("tareas:descargar",args=[t.pk+999,a.pk])).status_code,404)
  def test_demo_idempotente(self):
-  call_command("crear_demo_aulapro");call_command("crear_demo_aulapro");self.assertEqual(Tarea.objects.filter(institucion__codigo="DEMO").count(),3)
+    call_command("crear_demo_aulapro", allow_production_demo=True);call_command("crear_demo_aulapro", allow_production_demo=True);self.assertEqual(Tarea.objects.filter(institucion__codigo="DEMO").count(),3)

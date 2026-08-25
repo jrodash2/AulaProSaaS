@@ -1,3 +1,4 @@
+from django.views.decorators.http import require_POST
 from io import BytesIO
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -7,13 +8,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from openpyxl import Workbook
 from core.decorators import institucion_required
+from core.permissions import LECTURA_ACADEMICA
 from alumnos.models import Alumno
 from .forms import SesionForm
 from .models import RegistroAsistencia, SesionAsistencia
 from .services import ROLES_GESTION, anular_sesion, cerrar_sesion, crear_sesion, guardar_registros, justificar, puede_editar_sesion, reabrir_sesion, resumen_alumno, rol, sesiones_permitidas
 
 def _permitir_lectura(request):
-    if rol(request) == "CONTABILIDAD": raise PermissionDenied
+    if rol(request) not in LECTURA_ACADEMICA: raise PermissionDenied
 
 def _sesion(request, pk):
     return get_object_or_404(sesiones_permitidas(request).select_related("ciclo", "oferta_academica", "grado", "seccion", "curso", "creada_por", "docente"), pk=pk)
@@ -72,6 +74,7 @@ def tomar(request, pk):
     return render(request,"asistencia/tomar.html",{"sesion":sesion,"registros":registros,"total":total,"pendientes":pendientes,"registrados":total-pendientes,"porcentaje":round((total-pendientes)*100/total) if total else 0,"editable":sesion.estado in ("ABIERTA","BORRADOR")})
 
 @institucion_required
+@require_POST
 def reabrir(request, pk):
     if rol(request) not in ROLES_GESTION: raise PermissionDenied
     sesion=_sesion(request,pk)
@@ -81,6 +84,7 @@ def reabrir(request, pk):
     return redirect("asistencia:detalle",pk)
 
 @institucion_required
+@require_POST
 def anular(request, pk):
     if rol(request) not in ROLES_GESTION: raise PermissionDenied
     sesion=_sesion(request,pk)
@@ -98,6 +102,7 @@ def justificaciones(request):
     return render(request,"asistencia/justificaciones.html",{"registros":qs[:200]})
 
 @institucion_required
+@require_POST
 def justificar_view(request, pk):
     if rol(request) not in ROLES_GESTION|{"SECRETARIA"}: raise PermissionDenied
     registro=get_object_or_404(RegistroAsistencia,institucion=request.institucion,pk=pk,estado="AUSENTE")

@@ -1,14 +1,14 @@
 # AulaPro SaaS
 
-AulaPro es una plataforma SaaS multiinstitución para la administración académica, administrativa y financiera de establecimientos educativos de Guatemala. Esta primera etapa entrega una base segura, modular y ligera; no incluye todavía alumnos, notas, asistencia, pagos ni catálogos MINEDUC.
+AulaPro es una plataforma SaaS multiinstitución para la administración académica, administrativa y financiera de establecimientos educativos de Guatemala. Incluye operación multiinstitución, académico, alumnos, docentes, asistencia, calificaciones, tareas, finanzas, portal familiar, comunicaciones y reportes integrales.
 
 ## Arquitectura inicial
 
 - **Django 5.2 LTS y Python 3.12**, con templates del servidor, Bootstrap 5 y JavaScript sin frameworks.
 - **PostgreSQL** en producción; SQLite queda disponible únicamente como alternativa local y para pruebas automatizadas.
-- Settings separados en `base`, `development` y `production`.
+- Configuración unificada y controlada por variables de entorno, con validaciones que impiden usar secretos, hosts o SQLite inseguros en producción.
 - Usuario personalizado (`cuentas.Usuario`) definido desde la primera migración.
-- Apps enfocadas: `core`, `cuentas`, `instituciones`, `auditoria` y la preparación vacía de `catalogos`.
+- Apps de dominio separadas y tenant-aware para la operación académica, administrativa, financiera, portal, comunicación y analítica.
 - Interfaz independiente del Django Admin, que se conserva para operación técnica.
 - Catálogo académico global versionado, separado por completo de la futura oferta académica de cada institución.
 
@@ -91,9 +91,28 @@ Los superusuarios acceden a `/catalogos/carreras/` para administrar niveles, tip
 
 Una carrera posee múltiples versiones; cada versión contiene grados y `CursoPensum` relaciona un curso reutilizable con un grado concreto, su orden, períodos semanales y obligatoriedad. Las versiones pueden duplicarse de forma atómica sin duplicar `CursoCatalogo`. La estrategia de fuentes oficiales e importación futura está documentada en `catalogos/README.md`.
 
+## Datos demo
+
+Con `DEBUG=True`, `python manage.py crear_demo_aulapro` crea o actualiza un entorno idempotente por roles. Consulte [`docs/demo.md`](docs/demo.md). En producción el comando está bloqueado salvo flag explícito.
+
+## Health checks
+
+- `GET /health/`: estado y versión de la aplicación.
+- `GET /health/db/`: disponibilidad mínima de la base mediante `SELECT 1`.
+
+Ambos endpoints omiten configuración y datos institucionales.
+
 ## Producción
 
-Use el módulo unificado `DJANGO_SETTINGS_MODULE=config.settings`, una `SECRET_KEY` externa y una URL PostgreSQL segura. La configuración de producción se controla mediante variables de entorno y requiere HTTPS, cookies seguras, HSTS y `DEBUG=False`. Sirva los archivos estáticos mediante el servidor web o almacenamiento de archivos correspondiente y los uploads de `media/` fuera del repositorio.
+Use el módulo unificado `DJANGO_SETTINGS_MODULE=config.settings`, una `SECRET_KEY` externa y PostgreSQL. Ejecute `check --deploy`, migraciones y `collectstatic` antes del release. La guía completa está en [`docs/production.md`](docs/production.md) y el procedimiento de respaldo/restauración en [`docs/backup.md`](docs/backup.md).
+
+## Documentación operativa
+
+- [Producción](docs/production.md)
+- [Backups](docs/backup.md)
+- [Demo](docs/demo.md)
+- [Matriz de rutas y permisos](docs/routes-permissions.md)
+- [QA Sprint 13](docs/qa-sprint13.md)
 
 ## Alcance siguiente
 

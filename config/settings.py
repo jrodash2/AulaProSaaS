@@ -25,7 +25,11 @@ if not SECRET_KEY:
     else:
         raise RuntimeError("SECRET_KEY debe configurarse cuando DEBUG=False.")
 
-ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver" if DEBUG else "")
+if not DEBUG and not ALLOWED_HOSTS:
+    raise RuntimeError("ALLOWED_HOSTS debe configurarse explícitamente cuando DEBUG=False.")
+if not DEBUG and "*" in ALLOWED_HOSTS:
+    raise RuntimeError("ALLOWED_HOSTS no puede contener '*' en producción.")
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
@@ -108,6 +112,10 @@ if DATABASE_URL:
         }
     }
 elif DB_NAME:
+    if not DEBUG:
+        faltantes = [name for name in ("DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT") if not os.getenv(name, "").strip()]
+        if faltantes:
+            raise RuntimeError("Variables PostgreSQL requeridas ausentes: " + ", ".join(faltantes))
     db_options = {}
     if os.getenv("DB_SSLMODE"):
         db_options["sslmode"] = os.getenv("DB_SSLMODE")
@@ -168,10 +176,31 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", not DEBUG)
 SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", not DEBUG)
-SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0"))
-SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", False)
-SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", False)
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", not DEBUG)
 
 # Útil en cPanel/Passenger cuando HTTPS termina en un proxy inverso.
 if env_bool("USE_X_FORWARDED_PROTO", False):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Identificación y observabilidad del despliegue.
+APP_VERSION = os.getenv("APP_VERSION", "dev").strip() or "dev"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO" if not DEBUG else "WARNING").upper()
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "aulapro": {"format": "{asctime} {levelname} {name} {message}", "style": "{"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "aulapro"},
+    },
+    "loggers": {
+        "django": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+        "aulapro": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False},
+    },
+}
+
+SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "same-origin")
+SECURE_CROSS_ORIGIN_OPENER_POLICY = os.getenv("SECURE_CROSS_ORIGIN_OPENER_POLICY", "same-origin")

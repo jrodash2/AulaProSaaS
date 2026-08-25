@@ -1,3 +1,4 @@
+from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -24,6 +25,7 @@ def abrir_notificacion(request,pk):
     if not n.leida:n.leida=True;n.fecha_lectura=timezone.now();n.save(update_fields=("leida","fecha_lectura"))
     return redirect(n.url_destino or "comunicaciones:notificaciones")
 @login_required
+@require_POST
 def marcar_todas(request):
     _inst(request)
     if request.method!="POST":raise PermissionDenied
@@ -67,6 +69,7 @@ def detalle(request,pk):
     total=com.notificaciones.count();leidas=com.notificaciones.filter(leida=True).count()
     return render(request,"comunicaciones/detalle.html",{"comunicacion":com,"total":total,"leidas":leidas,"pendientes":total-leidas,"tasa":round(leidas*100/total,2) if total else 0})
 @login_required
+@require_POST
 def publicar_view(request,pk):
     _inst(request)
     if request.method!="POST":raise PermissionDenied
@@ -92,6 +95,7 @@ def reportes(request):
     return render(request,"comunicaciones/reportes.html",{"comunicaciones":qs})
 
 @login_required
+@require_POST
 def cambiar_estado(request,pk,estado):
     _inst(request)
     if request.method!="POST" or not puede_gestionar(request):raise PermissionDenied

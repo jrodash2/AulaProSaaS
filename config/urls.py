@@ -5,7 +5,10 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from cuentas.forms import AulaProAuthenticationForm
+from core.health import health,health_db
 urlpatterns = [
+    path("health/", health, name="health"),
+    path("health/db/", health_db, name="health_db"),
     path("admin/", admin.site.urls),
     path(
         "login/",

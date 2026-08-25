@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404,redirect,render
 from django.views.decorators.http import require_POST
 from openpyxl import Workbook
 from core.decorators import institucion_required
+from core.permissions import LECTURA_ACADEMICA
 from alumnos.models import Alumno
 from docentes.models import AsignacionDocente
 from auditoria.services import registrar_evento
@@ -16,7 +17,7 @@ from .models import ActividadEvaluacion,Calificacion,PeriodoAcademico,TipoEvalua
 from .services import GESTION,actividades_permitidas,asignaciones_usuario,cerrar_periodo,config,crear_actividad,guardar_calificacion,promedio_alumno,reabrir_periodo,resultado,rol
 
 def acceso(r):
- if rol(r)=="CONTABILIDAD":raise PermissionDenied
+ if rol(r) not in LECTURA_ACADEMICA:raise PermissionDenied
 def excel(nombre,headers,rows):
  w=Workbook();s=w.active;s.title=nombre[:31];s.append(headers)
  for x in rows:s.append(x)

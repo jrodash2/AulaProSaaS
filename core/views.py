@@ -184,7 +184,7 @@ def modulo(request, modulo):
 
 
 def error_403(request, exception=None):
-    return render(request, "errors/error.html", {"codigo": "403", "titulo": "No tienes permiso para acceder.", "icono": "shield-lock"}, status=403)
+    return render(request, "errors/error.html", {"codigo": "403", "titulo": "No tienes permiso para acceder a esta sección.", "icono": "shield-lock"}, status=403)
 
 
 def error_404(request, exception=None):

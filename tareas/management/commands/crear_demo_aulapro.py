@@ -1,6 +1,7 @@
 from datetime import date,timedelta
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand,CommandError
+from django.conf import settings
 from django.utils import timezone
 from academico.models import CicloEscolar,CursoInstitucion,GradoInstitucion,OfertaAcademica,Seccion
 from alumnos.models import Alumno,Inscripcion,Encargado,AlumnoEncargado
@@ -18,7 +19,10 @@ from asistencia.models import SesionAsistencia,RegistroAsistencia
 from calificaciones.models import PeriodoAcademico,TipoEvaluacion,ActividadEvaluacion,Calificacion
 class Command(BaseCommand):
  help="Crea un entorno demo idempotente por roles, incluyendo tareas."
+ def add_arguments(self,parser):
+  parser.add_argument("--allow-production-demo",action="store_true",help="Confirma explícitamente la creación de datos demo con DEBUG=False.")
  def handle(self,*args,**opts):
+  if not settings.DEBUG and not opts["allow_production_demo"]:raise CommandError("Datos demo bloqueados con DEBUG=False. Use --allow-production-demo solo en un entorno controlado.")
   inst,_=Institucion.objects.get_or_create(codigo="DEMO",defaults={"nombre":"Institución Demo AulaPro","nombre_corto":"AulaPro Demo"});U=get_user_model()
   users={}
   nombres={"ADMINISTRADOR":"admin","DIRECTOR":"director","DOCENTE":"docente","CONTABILIDAD":"contabilidad","SECRETARIA":"secretaria"}

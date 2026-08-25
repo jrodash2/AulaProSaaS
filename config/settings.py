@@ -43,6 +43,13 @@ INSTALLED_APPS = [
     "academico",
     "alumnos",
     "docentes",
+    "asistencia",
+    "calificaciones",
+    "tareas",
+    "finanzas",
+    "portal",
+    "comunicaciones",
+    "reportes",
 ]
 
 MIDDLEWARE = [
@@ -69,6 +76,8 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.aulapro_context",
+                "portal.context_processors.portal_context",
+                "comunicaciones.context_processors.notificaciones_context",
             ],
         },
     }

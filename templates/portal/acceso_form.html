@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<h1>Crear acceso de {{ tipo }}</h1><p>{{ persona }}</p><form method="post" class="panel compact-form">{% csrf_token %}{% for field in form %}{% include 'components/form_field.html' with field=field %}{% endfor %}<button class="btn btn-primary mt-3">Crear acceso</button></form>{% endblock %}

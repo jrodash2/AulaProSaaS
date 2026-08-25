@@ -34,13 +34,29 @@ def global_dashboard(request):
 def institucion_dashboard(request):
     from academico.models import CicloEscolar, JornadaInstitucion, OfertaAcademica
     ciclo = CicloEscolar.objects.filter(institucion=request.institucion, es_actual=True).first()
+    if request.asignacion_institucion.rol in {"PADRE", "ALUMNO"}:
+        return redirect("portal:dashboard")
     if request.asignacion_institucion.rol == "DOCENTE":
         from docentes.models import Docente
+        from tareas.models import Tarea
+        from django.utils import timezone
         docente = Docente.objects.filter(institucion=request.institucion, usuario=request.user).first()
         clases = docente.asignaciones.filter(ciclo=ciclo, activa=True).select_related("curso", "grado", "seccion") if docente and ciclo else []
-        return render(request, "docentes/dashboard.html", {"docente": docente, "ciclo_actual": ciclo, "clases": clases})
+        tareas_proximas = Tarea.objects.filter(institucion=request.institucion, asignacion_docente__docente=docente, estado=Tarea.Estado.PUBLICADA, fecha_limite__gte=timezone.now()).select_related("curso", "seccion").order_by("fecha_limite")[:5] if docente else []
+        return render(request, "docentes/dashboard.html", {"docente": docente, "ciclo_actual": ciclo, "clases": clases, "tareas_proximas": tareas_proximas})
     from alumnos.models import Alumno, Inscripcion
     from docentes.models import Docente
+    from asistencia.models import RegistroAsistencia, SesionAsistencia
+    from finanzas.models import Cargo, Pago
+    from decimal import Decimal
+    from django.db.models import Sum
+    from django.utils import timezone
+    registros_hoy = RegistroAsistencia.objects.filter(institucion=request.institucion, sesion__fecha=timezone.localdate(), sesion__tipo=SesionAsistencia.Tipo.GENERAL).exclude(sesion__estado=SesionAsistencia.Estado.ANULADA).exclude(estado=RegistroAsistencia.Estado.SIN_MARCAR)
+    total_asistencia_hoy = registros_hoy.count()
+    asistieron_hoy = registros_hoy.filter(estado__in=(RegistroAsistencia.Estado.PRESENTE, RegistroAsistencia.Estado.TARDE)).count()
+    hoy = timezone.localdate()
+    ingresos_mes = Pago.objects.filter(institucion=request.institucion, estado=Pago.Estado.CONFIRMADO, fecha_pago__year=hoy.year, fecha_pago__month=hoy.month).aggregate(total=Sum("monto"))["total"] or Decimal("0")
+    cuentas_por_cobrar = sum((cargo.saldo for cargo in Cargo.objects.filter(institucion=request.institucion).exclude(estado=Cargo.Estado.ANULADO)), Decimal("0"))
     context = {
         "ciclo_actual": ciclo,
         "total_alumnos_activos": Alumno.objects.filter(institucion=request.institucion, estado=Alumno.Estado.ACTIVO).count(),
@@ -52,7 +68,14 @@ def institucion_dashboard(request):
         "tiene_oferta": OfertaAcademica.objects.filter(institucion=request.institucion, activa=True).exists(),
         "tiene_jornadas": JornadaInstitucion.objects.filter(institucion=request.institucion, activa=True).exists(),
         "tiene_usuarios": request.institucion.asignaciones_usuario.filter(activo=True).exists(),
+        "asistencia_hoy": round(asistieron_hoy * 100 / total_asistencia_hoy, 1) if total_asistencia_hoy else None,
+        "ingresos_mes": ingresos_mes,
+        "cuentas_por_cobrar": cuentas_por_cobrar,
     }
+    if request.asignacion_institucion.rol == "PROPIETARIO":
+        from suscripciones.services import obtener_uso_plan, suscripcion_actual
+        context["suscripcion"] = suscripcion_actual(request.institucion)
+        context["uso_plan"] = obtener_uso_plan(request.institucion)
     return render(request, "core/institucion_dashboard.html", context)
 
 
@@ -165,7 +188,7 @@ def modulo(request, modulo):
 
 
 def error_403(request, exception=None):
-    return render(request, "errors/error.html", {"codigo": "403", "titulo": "No tienes permiso para acceder.", "icono": "shield-lock"}, status=403)
+    return render(request, "errors/error.html", {"codigo": "403", "titulo": "No tienes permiso para acceder a esta sección.", "icono": "shield-lock"}, status=403)
 
 
 def error_404(request, exception=None):

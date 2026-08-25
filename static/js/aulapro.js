@@ -95,3 +95,45 @@ if (window.AulaProDocenteOpciones) {
     const data=await response.json(); target.innerHTML=`<option value="">${label}</option>`+data.resultados.map(x=>`<option value="${x.id}">${x.nombre}</option>`).join(""); target.disabled=false;
   }));
 }
+
+if(window.AulaProAttendance){
+ const form=document.getElementById('attendanceForm'), rows=[...document.querySelectorAll('.attendance-row')], total=window.AulaProAttendance.total;
+ const refresh=()=>{const done=rows.filter(r=>r.querySelector('input:checked')?.value!=='SIN_MARCAR').length,pending=total-done,pct=total?Math.round(done*100/total):0;document.getElementById('progressCopy').textContent=`${done} / ${total} registrados`;document.getElementById('pendingCopy').textContent=`${pending} pendientes`;document.getElementById('stickyProgress').textContent=`${done} de ${total} registrados`;document.getElementById('attendanceProgress').style.width=`${pct}%`;document.getElementById('closeAttendance').disabled=pending>0};
+ form?.addEventListener('change',refresh);document.getElementById('markAll')?.addEventListener('click',()=>{rows.forEach(r=>{const x=r.querySelector('input[value="PRESENTE"]');if(x&&!x.disabled)x.checked=true});refresh()});document.getElementById('studentSearch')?.addEventListener('input',e=>rows.forEach(r=>r.hidden=!r.dataset.search.includes(e.target.value.toLowerCase())));refresh();
+}
+
+document.querySelectorAll('.grade-input').forEach(input=>{let timer;input.addEventListener('input',()=>{const state=input.nextElementSibling;state.textContent='Guardando...';input.classList.remove('save-error');clearTimeout(timer);timer=setTimeout(async()=>{const data=new FormData();data.append('punteo',input.value);data.append('estado',input.value===''?'PENDIENTE':'CALIFICADO');try{const response=await fetch(input.dataset.url,{method:'POST',headers:{'X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]')?.value||document.cookie.match(/csrftoken=([^;]+)/)?.[1]||''},body:data});const json=await response.json();if(!response.ok||!json.ok)throw new Error(json.error);state.textContent='Guardado ✓'}catch(error){state.textContent=error.message||'No se pudo guardar';input.classList.add('save-error')}},650)});input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();const all=[...document.querySelectorAll('.grade-input')],next=all[all.indexOf(input)+1];next?.focus()}})});
+
+document.querySelectorAll('.apply-amount').forEach(input=>input.addEventListener('input',()=>{const total=[...document.querySelectorAll('.apply-amount')].reduce((sum,x)=>sum+(parseFloat(x.value)||0),0);const output=document.getElementById('appliedTotal');if(output)output.textContent=total.toFixed(2)}));
+
+// Previene doble envío en operaciones críticas y restablece el modal compartido.
+document.querySelectorAll("form").forEach(form => {
+  form.addEventListener("submit", event => {
+    if (form.dataset.submitting === "true") { event.preventDefault(); return; }
+    if (event.submitter?.name) {
+      const value = document.createElement("input");
+      value.type = "hidden"; value.name = event.submitter.name; value.value = event.submitter.value;
+      form.appendChild(value);
+    }
+    form.dataset.submitting = "true";
+    form.querySelectorAll('button[type="submit"], button:not([type])').forEach(button => {
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      if (!button.dataset.originalText) button.dataset.originalText = button.innerHTML;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Procesando…';
+    });
+  });
+});
+const confirmModal = document.getElementById("confirmModal");
+confirmModal?.addEventListener("hidden.bs.modal", () => {
+  const form = document.getElementById("confirmModalForm");
+  if (form) {
+    form.removeAttribute("action");
+    delete form.dataset.submitting;
+    form.querySelectorAll("button").forEach(button => {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+      if (button.dataset.originalText) button.innerHTML = button.dataset.originalText;
+    });
+  }
+});

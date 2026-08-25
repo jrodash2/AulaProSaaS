@@ -49,6 +49,10 @@ def prevalidar(archivo,institucion,ciclo):
         if alumno and Inscripcion.objects.filter(alumno=alumno,ciclo=ciclo,estado=Inscripcion.Estado.ACTIVA).exists(): row_errors.append("El alumno ya tiene inscripción activa en este ciclo")
         fila={"numero":numero,"data":data,"cui":cui,"alumno":alumno,"grado":grado,"seccion":seccion,"familia":familias.get(str(data["CODIGO_FAMILIA"] or "").strip()),"encargado":encargados.get(str(data["CUI_ENCARGADO"] or "").strip()),"errores":row_errors,"advertencias":row_warn,"accion":"Alumno existente / nueva inscripción" if alumno else "Nuevo alumno"}
         filas.append(fila); errores.extend([f"Fila {numero}: {e}" for e in row_errors]); advertencias.extend([f"Fila {numero}: {e}" for e in row_warn])
+    if not errores:
+        from suscripciones.services import validar_cupo_alumnos
+        try: validar_cupo_alumnos(institucion,len(filas))
+        except ValidationError as exc: errores.extend(exc.messages)
     return {"filas":filas,"errores":errores,"advertencias":advertencias}
 
 @transaction.atomic

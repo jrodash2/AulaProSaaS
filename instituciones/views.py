@@ -1,3 +1,4 @@
+from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Count, Q
@@ -42,10 +43,16 @@ def lista(request):
 
 
 @superusuario_required
+@transaction.atomic
 def crear(request):
     form = InstitucionCrearForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         institucion = form.save()
+        from datetime import timedelta
+        from django.utils import timezone
+        from suscripciones.models import Suscripcion
+        dias = form.cleaned_data.get("trial_dias") or 0; hoy = timezone.localdate()
+        Suscripcion.objects.create(institucion=institucion, plan=form.cleaned_data["plan"], estado="PRUEBA" if dias else "ACTIVA", modalidad="MENSUAL", fecha_inicio=hoy, fecha_fin=hoy + timedelta(days=dias or 30), periodo_prueba_hasta=hoy + timedelta(days=dias) if dias else None, creada_por=request.user)
         evento = registrar_evento(request, "CREAR", institucion)
         evento.institucion = institucion
         evento.save(update_fields=("institucion",))
@@ -66,6 +73,7 @@ def detalle(request, uuid):
 def editar(request, uuid):
     institucion = get_object_or_404(Institucion, uuid=uuid)
     form = InstitucionCrearForm(request.POST or None, request.FILES or None, instance=institucion)
+    form.fields.pop("plan", None); form.fields.pop("trial_dias", None)
     if request.method == "POST" and form.is_valid():
         form.save()
         evento = registrar_evento(request, "ACTUALIZAR", institucion)
@@ -77,6 +85,7 @@ def editar(request, uuid):
 
 
 @superusuario_required
+@require_POST
 def cambiar_estado(request, uuid):
     if request.method != "POST":
         return redirect("instituciones:detalle", uuid=uuid)
@@ -142,6 +151,7 @@ def usuario_editar(request, pk):
 
 
 @administrador_institucion_required
+@require_POST
 def usuario_estado(request, pk):
     asignacion = _asignacion(request, pk)
     if request.method == "POST":

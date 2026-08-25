@@ -173,9 +173,10 @@ def metricas_saas():
 
 
 def crear_catalogo_inicial():
+    from .catalogo import MODULOS_OFICIALES, MODULOS_POR_PLAN
     modulos = {}
-    for orden, (codigo, nombre) in enumerate(ModuloSaaS.Codigo.choices, 1):
-        modulos[codigo], _ = ModuloSaaS.objects.update_or_create(codigo=codigo, defaults={"nombre": nombre, "orden": orden, "activo": True})
+    for codigo, nombre, orden, descripcion, icono in MODULOS_OFICIALES:
+        modulos[codigo], _ = ModuloSaaS.objects.update_or_create(codigo=codigo, defaults={"nombre": nombre, "orden": orden, "descripcion": descripcion, "icono": icono, "activo": True})
     datos = (
         ("INICIO", "Inicio", Decimal("199"), Decimal("1990"), 100, 10),
         ("CRECE", "Crece", Decimal("299"), Decimal("2990"), 250, 20),
@@ -187,5 +188,5 @@ def crear_catalogo_inicial():
         plan, _ = Plan.objects.update_or_create(codigo=codigo, defaults={"nombre": nombre, "precio_mensual": mensual, "precio_anual": anual, "max_alumnos": alumnos, "max_usuarios": usuarios, "es_personalizado": codigo == "EMPRESA", "orden": orden, "activo": True, "publico": True})
         planes[codigo] = plan
         for modulo in modulos.values():
-            PlanModulo.objects.update_or_create(plan=plan, modulo=modulo, defaults={"habilitado": True})
+            PlanModulo.objects.get_or_create(plan=plan, modulo=modulo, defaults={"habilitado": modulo.codigo in MODULOS_POR_PLAN[codigo]})
     return planes

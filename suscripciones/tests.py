@@ -20,7 +20,7 @@ class SuscripcionBase(Base):
     def setUp(self):
         super().setUp()
         self.c.es_actual=True;self.c.save()
-        self.modulos={c:ModuloSaaS.objects.create(codigo=c,nombre=n) for c,n in ModuloSaaS.Codigo.choices}
+        self.modulos={c:ModuloSaaS.objects.update_or_create(codigo=c,defaults={"nombre":n,"activo":True})[0] for c,n in ModuloSaaS.Codigo.choices}
         self.plan=Plan.objects.create(codigo="TEST",nombre="Test",precio_mensual=Decimal("120"),precio_anual=Decimal("1200"),max_alumnos=10,max_usuarios=10)
         for m in self.modulos.values():PlanModulo.objects.create(plan=self.plan,modulo=m,habilitado=True)
         self.sus=Suscripcion.objects.create(institucion=self.a,plan=self.plan,estado="ACTIVA",modalidad="MENSUAL",fecha_inicio=date(2026,1,1),fecha_fin=date(2027,1,1),creada_por=self.u["ADMINISTRADOR"])

@@ -1,6 +1,8 @@
 from django.contrib import admin
 
-from .models import Institucion, UsuarioInstitucion
+from .models import Institucion, OnboardingInstitucion, UsuarioInstitucion
+
+admin.site.register(OnboardingInstitucion)
 
 
 @admin.register(Institucion)

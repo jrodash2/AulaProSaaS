@@ -114,6 +114,7 @@ Use el módulo unificado `DJANGO_SETTINGS_MODULE=config.settings`, una `SECRET_K
 - [Matriz de rutas y permisos](docs/routes-permissions.md)
 - [QA Sprint 13](docs/qa-sprint13.md)
 - [Planes y suscripciones SaaS](docs/suscripciones.md)
+- [Onboarding de instituciones](docs/onboarding.md)
 
 ## Alcance siguiente
 

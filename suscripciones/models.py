@@ -22,6 +22,8 @@ class ModuloSaaS(models.Model):
 
     codigo = models.CharField(max_length=24, choices=Codigo.choices, unique=True)
     nombre = models.CharField(max_length=80)
+    descripcion = models.CharField(max_length=240, blank=True)
+    icono = models.CharField(max_length=40, blank=True)
     activo = models.BooleanField(default=True)
     orden = models.PositiveSmallIntegerField(default=0)
 

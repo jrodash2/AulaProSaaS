@@ -8,6 +8,10 @@ Este dominio representa la relación comercial **AulaPro → institución**. No 
 
 Los planes INICIO, CRECE, PRO y EMPRESA se crean de forma idempotente mediante `crear_demo_aulapro` o `asignar_plan_inicial`. Los precios son datos editables, nunca constantes de templates.
 
+La migración `0002_modulos_saas_iniciales` garantiza que el catálogo oficial exista incluso antes de ejecutar comandos demo. `sincronizar_modulos_saas` repara nombres, descripciones, iconos y orden sin borrar módulos personalizados ni reactivar módulos desactivados, salvo que se use explícitamente `--reactivar`.
+
+El formulario de plan muestra cards seleccionables. Al guardar, cada módulo activo obtiene un `PlanModulo` con `habilitado=True` o `False`; al editar se leen las selecciones desde esa relación. INICIO incluye el núcleo académico, CRECE agrega Tareas, Portal y Comunicaciones, y PRO/EMPRESA incluyen todo. Estas selecciones son datos configurables en base de datos, no reglas de las vistas.
+
 ## Suscripción y estado efectivo
 
 Los estados persistidos son PRUEBA, ACTIVA, VENCIDA, SUSPENDIDA y CANCELADA. `estado_suscripcion()` combina estado, inicio, fin y vencimiento del trial sin escribir durante un GET. `actualizar_suscripciones` materializa vencimientos y puede ejecutarse por cron.
@@ -33,6 +37,7 @@ Una suscripción vencida funciona en modo lectura: los GET conservan acceso y la
 python manage.py asignar_plan_inicial --plan INICIO --trial-dias 30
 python manage.py actualizar_suscripciones
 python manage.py generar_alertas_suscripciones
+python manage.py sincronizar_modulos_saas
 ```
 
 Las alertas se generan a 30, 15, 7 y 1 días para propietarios. La clave de origen evita duplicados. No se envían correos ni WhatsApp.

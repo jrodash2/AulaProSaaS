@@ -72,3 +72,28 @@ class UsuarioInstitucion(models.Model):
                 from suscripciones.services import validar_cupo_usuarios
                 validar_cupo_usuarios(self.institucion, 1)
             return super().save(*args, **kwargs)
+
+
+class OnboardingInstitucion(models.Model):
+    TOTAL_PASOS = 11
+    institucion = models.OneToOneField(Institucion, on_delete=models.CASCADE, related_name="onboarding")
+    paso_actual = models.PositiveSmallIntegerField(default=1)
+    completado = models.BooleanField(default=False)
+    omitido = models.BooleanField(default=False)
+    fecha_inicio = models.DateTimeField(auto_now_add=True)
+    fecha_completado = models.DateTimeField(null=True, blank=True)
+    actualizado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="onboardings_actualizados")
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "onboarding institucional"
+        verbose_name_plural = "onboardings institucionales"
+
+    def clean(self):
+        if not 1 <= self.paso_actual <= self.TOTAL_PASOS:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({"paso_actual": f"El paso debe estar entre 1 y {self.TOTAL_PASOS}."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)

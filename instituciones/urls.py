@@ -16,4 +16,8 @@ urlpatterns = [
     path("plataforma/<uuid:uuid>/", views.detalle, name="detalle"),
     path("plataforma/<uuid:uuid>/editar/", views.editar, name="editar"),
     path("plataforma/<uuid:uuid>/estado/", views.cambiar_estado, name="estado"),
+    path("plataforma/<uuid:uuid>/onboarding/iniciar/", views.iniciar_onboarding_global, name="onboarding_iniciar_global"),
+    path("onboarding/", views.onboarding, name="onboarding"),
+    path("onboarding/paso/<int:paso>/", views.onboarding, name="onboarding_paso"),
+    path("onboarding/omitir/", views.onboarding_omitir, name="onboarding_omitir"),
 ]

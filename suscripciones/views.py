@@ -3,14 +3,14 @@ from datetime import timedelta
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core.decorators import institucion_required, superusuario_required
 from .forms import CambioPlanForm, PlanForm, RenovacionForm, SolicitudCambioPlanForm, SuscripcionForm
-from .models import HistorialSuscripcion, Plan, SolicitudCambioPlan, Suscripcion
+from .models import HistorialSuscripcion, ModuloSaaS, Plan, SolicitudCambioPlan, Suscripcion
 from .services import cambiar_estado, cambiar_plan, estado_suscripcion, metricas_saas, obtener_uso_plan, renovar_suscripcion, suscripcion_actual
 
 
@@ -32,7 +32,14 @@ def dashboard(request):
 
 @superusuario_required
 def planes(request):
-    return render(request, "suscripciones/planes.html", {"planes": Plan.objects.annotate(total_instituciones=Count("suscripciones__institucion", distinct=True)).prefetch_related("modulos")})
+    return render(request, "suscripciones/planes.html", {"planes": Plan.objects.annotate(total_instituciones=Count("suscripciones__institucion", distinct=True), total_modulos=Count("configuracion_modulos", filter=Q(configuracion_modulos__habilitado=True), distinct=True)).prefetch_related("modulos")})
+
+
+@superusuario_required
+def plan_detalle(request, pk):
+    plan = get_object_or_404(Plan, pk=pk)
+    modulos = ModuloSaaS.objects.filter(configuracion_planes__plan=plan, configuracion_planes__habilitado=True, activo=True).order_by("orden")
+    return render(request, "suscripciones/plan_detalle.html", {"plan": plan, "modulos": modulos})
 
 
 @superusuario_required
@@ -43,7 +50,7 @@ def plan_form(request, pk=None):
         item = form.save()
         messages.success(request, "Plan guardado correctamente.")
         return redirect("suscripciones:planes")
-    return render(request, "suscripciones/formulario.html", {"form": form, "titulo": "Editar plan" if plan else "Nuevo plan"})
+    return render(request, "suscripciones/plan_formulario.html", {"form": form, "titulo": "Editar plan" if plan else "Nuevo plan"})
 
 
 @superusuario_required

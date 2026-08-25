@@ -22,6 +22,14 @@ class AulaProFormMixin:
             classes = widget.attrs.get("class", "").split()
             if css_class not in classes:
                 classes.append(css_class)
-            if self.is_bound and name in self.errors and "is-invalid" not in classes:
+            # Never access ``self.errors`` while a subclass is still running
+            # ``__init__``: doing so triggers validation before it can finish
+            # configuring tenant-aware/dynamic choices.
+            if self._errors is not None and name in self._errors and "is-invalid" not in classes:
                 classes.append("is-invalid")
             widget.attrs["class"] = " ".join(classes)
+
+    def full_clean(self):
+        super().full_clean()
+        # Validation has finished, so error classes can now be applied safely.
+        self.aplicar_estilos()

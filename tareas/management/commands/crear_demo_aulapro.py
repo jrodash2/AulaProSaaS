@@ -7,7 +7,7 @@ from academico.models import CicloEscolar,CursoInstitucion,GradoInstitucion,Ofer
 from alumnos.models import Alumno,Inscripcion,Encargado,AlumnoEncargado
 from catalogos.models import NivelEducativo
 from docentes.models import AsignacionDocente,Docente
-from instituciones.models import Institucion,UsuarioInstitucion
+from instituciones.models import Institucion,OnboardingInstitucion,UsuarioInstitucion
 from finanzas.models import Cargo,ConceptoCobro,MetodoPago,Pago
 from finanzas.services import config as config_financiera,registrar_pago
 from django.test import RequestFactory
@@ -73,4 +73,5 @@ class Command(BaseCommand):
    cs=list(Cargo.objects.filter(institucion=inst,alumno=alumnos[0]));registrar_pago(req,alumno=alumnos[0],monto=sum(c.saldo for c in cs),metodo_pago=efectivo,referencia="DEMO-PAGO-1",aplicaciones={c.pk:c.saldo for c in cs})
   if len(alumnos)>1 and not Pago.objects.filter(institucion=inst,referencia="DEMO-PAGO-2").exists():
    c=Cargo.objects.filter(institucion=inst,alumno=alumnos[1],concepto=colegiatura).order_by("fecha_vencimiento").first();registrar_pago(req,alumno=alumnos[1],monto=200,metodo_pago=efectivo,referencia="DEMO-PAGO-2",aplicaciones={c.pk:200})
+  onboarding,_=OnboardingInstitucion.objects.get_or_create(institucion=inst);onboarding.paso_actual=11;onboarding.completado=True;onboarding.omitido=False;onboarding.fecha_completado=timezone.now();onboarding.actualizado_por=users["ADMINISTRADOR"];onboarding.save()
   self.stdout.write(self.style.SUCCESS("Demo AulaPro creado/actualizado con portal familiar, comunicación, tareas y finanzas por roles."))

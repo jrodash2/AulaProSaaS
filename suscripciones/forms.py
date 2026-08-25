@@ -5,22 +5,28 @@ from .models import ModuloSaaS, Plan, SolicitudCambioPlan, Suscripcion
 
 
 class PlanForm(AulaProFormMixin, forms.ModelForm):
-    modulos = forms.ModelMultipleChoiceField(queryset=ModuloSaaS.objects.filter(activo=True), widget=forms.CheckboxSelectMultiple)
+    # This is deliberately not named ``modulos``: that is the model M2M and
+    # ModelForm would try to validate/save it in addition to PlanModulo.
+    modulos_seleccionados = forms.MultipleChoiceField(
+        choices=(), widget=forms.CheckboxSelectMultiple, label="Módulos incluidos"
+    )
 
     class Meta:
         model = Plan
-        fields = ("codigo", "nombre", "descripcion", "precio_mensual", "precio_anual", "max_alumnos", "max_usuarios", "max_docentes", "es_personalizado", "activo", "publico", "orden", "modulos")
+        fields = ("codigo", "nombre", "descripcion", "precio_mensual", "precio_anual", "max_alumnos", "max_usuarios", "max_docentes", "es_personalizado", "activo", "publico", "orden")
         widgets = {"descripcion": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.instance.pk:
-            self.fields["modulos"].initial = self.instance.modulos.filter(configuracion_planes__habilitado=True)
+        self.modulos_disponibles = list(ModuloSaaS.objects.filter(activo=True).order_by("orden", "nombre"))
+        self.fields["modulos_seleccionados"].choices = [(str(modulo.pk), modulo.nombre) for modulo in self.modulos_disponibles]
+        if self.instance.pk and not self.is_bound:
+            self.fields["modulos_seleccionados"].initial = [str(pk) for pk in ModuloSaaS.objects.filter(configuracion_planes__plan=self.instance, configuracion_planes__habilitado=True, activo=True).values_list("pk", flat=True)]
 
     def save(self, commit=True):
         plan = super().save(commit)
         if commit:
-            seleccionados = set(self.cleaned_data["modulos"].values_list("pk", flat=True))
+            seleccionados = {int(pk) for pk in self.cleaned_data["modulos_seleccionados"]}
             for modulo in ModuloSaaS.objects.filter(activo=True):
                 from .models import PlanModulo
                 PlanModulo.objects.update_or_create(plan=plan, modulo=modulo, defaults={"habilitado": modulo.pk in seleccionados})

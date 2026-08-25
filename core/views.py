@@ -76,6 +76,9 @@ def institucion_dashboard(request):
         from suscripciones.services import obtener_uso_plan, suscripcion_actual
         context["suscripcion"] = suscripcion_actual(request.institucion)
         context["uso_plan"] = obtener_uso_plan(request.institucion)
+    if request.asignacion_institucion.rol in {"PROPIETARIO", "ADMINISTRADOR", "DIRECTOR"}:
+        from instituciones.onboarding import estado_onboarding
+        context["estado_onboarding"] = estado_onboarding(request.institucion)
     return render(request, "core/institucion_dashboard.html", context)
 
 

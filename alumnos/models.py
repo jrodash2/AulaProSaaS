@@ -178,7 +178,15 @@ class Inscripcion(models.Model):
         if self.seccion_id and (self.seccion.institucion_id != self.institucion_id or self.seccion.ciclo_id != self.ciclo_id or self.seccion.grado_id != self.grado_id): errors["seccion"]="La sección no corresponde al grado."
         if self.estado == self.Estado.RETIRADA and (not self.fecha_retiro or not self.motivo_retiro): errors["motivo_retiro"]="Indique fecha y motivo del retiro."
         if errors: raise ValidationError(errors)
-    def save(self,*args,**kwargs): self.full_clean(); return super().save(*args,**kwargs)
+    def save(self,*args,**kwargs):
+        with transaction.atomic():
+            from instituciones.models import Institucion
+            Institucion.objects.select_for_update().get(pk=self.institucion_id)
+            activa_nueva=self.estado==self.Estado.ACTIVA and (not self.pk or not type(self).objects.filter(pk=self.pk,estado=self.Estado.ACTIVA).exists())
+            if activa_nueva:
+                from suscripciones.services import validar_cupo_alumnos
+                validar_cupo_alumnos(self.institucion,1)
+            self.full_clean(); return super().save(*args,**kwargs)
 
 
 class ImportacionAlumnos(models.Model):

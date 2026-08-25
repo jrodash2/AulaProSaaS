@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "portal",
     "comunicaciones",
     "reportes",
+    "suscripciones",
 ]
 
 MIDDLEWARE = [
@@ -63,6 +64,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "core.middleware.InstitucionActivaMiddleware",
+    "suscripciones.middleware.SuscripcionActivaMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]

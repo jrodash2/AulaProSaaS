@@ -72,6 +72,10 @@ def institucion_dashboard(request):
         "ingresos_mes": ingresos_mes,
         "cuentas_por_cobrar": cuentas_por_cobrar,
     }
+    if request.asignacion_institucion.rol == "PROPIETARIO":
+        from suscripciones.services import obtener_uso_plan, suscripcion_actual
+        context["suscripcion"] = suscripcion_actual(request.institucion)
+        context["uso_plan"] = obtener_uso_plan(request.institucion)
     return render(request, "core/institucion_dashboard.html", context)
 
 

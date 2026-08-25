@@ -29,5 +29,13 @@ class InstitucionForm(AulaProFormMixin, forms.ModelForm):
 
 
 class InstitucionCrearForm(InstitucionForm):
+    plan = forms.ModelChoiceField(queryset=__import__("suscripciones.models", fromlist=["Plan"]).Plan.objects.filter(activo=True), required=False, help_text="Obligatorio para nuevas instituciones.")
+    trial_dias = forms.IntegerField(min_value=0, initial=30, required=False, label="Días de prueba")
     class Meta(InstitucionForm.Meta):
         fields = ("nombre", "nombre_corto", "codigo", "razon_social", "direccion", "departamento", "municipio", "telefono", "email", "sitio_web", "logo_principal", "logo_secundario", "color_primario", "color_secundario", "activa")
+
+    def clean(self):
+        cleaned = super().clean()
+        if not self.instance.pk and not cleaned.get("plan"):
+            self.add_error("plan", "Seleccione el plan inicial.")
+        return cleaned

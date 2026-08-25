@@ -17,6 +17,8 @@ from comunicaciones.models import Comunicacion,ComunicacionDestino,ComunicacionA
 from comunicaciones.services import sincronizar_notificaciones,notificar_tarea
 from asistencia.models import SesionAsistencia,RegistroAsistencia
 from calificaciones.models import PeriodoAcademico,TipoEvaluacion,ActividadEvaluacion,Calificacion
+from suscripciones.models import Suscripcion
+from suscripciones.services import crear_catalogo_inicial
 class Command(BaseCommand):
  help="Crea un entorno demo idempotente por roles, incluyendo tareas."
  def add_arguments(self,parser):
@@ -24,6 +26,8 @@ class Command(BaseCommand):
  def handle(self,*args,**opts):
   if not settings.DEBUG and not opts["allow_production_demo"]:raise CommandError("Datos demo bloqueados con DEBUG=False. Use --allow-production-demo solo en un entorno controlado.")
   inst,_=Institucion.objects.get_or_create(codigo="DEMO",defaults={"nombre":"Institución Demo AulaPro","nombre_corto":"AulaPro Demo"});U=get_user_model()
+  planes=crear_catalogo_inicial();Suscripcion.objects.get_or_create(institucion=inst,estado="ACTIVA",defaults={"plan":planes["CRECE"],"modalidad":"MENSUAL","fecha_inicio":date(2026,1,1),"fecha_fin":date(2027,1,1),"precio_acordado":planes["CRECE"].precio_mensual})
+  superadmin,_=U.objects.get_or_create(username="demo_superadmin",defaults={"is_staff":True,"is_superuser":True});superadmin.is_staff=True;superadmin.is_superuser=True;superadmin.set_password("AulaProDemo2026!");superadmin.save()
   users={}
   nombres={"ADMINISTRADOR":"admin","DIRECTOR":"director","DOCENTE":"docente","CONTABILIDAD":"contabilidad","SECRETARIA":"secretaria"}
   for rol,sufijo in nombres.items():

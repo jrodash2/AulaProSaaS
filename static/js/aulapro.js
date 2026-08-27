@@ -37,10 +37,39 @@ document.addEventListener("click", event => {
 });
 
 document.querySelectorAll(".toast").forEach(element => bootstrap.Toast.getOrCreateInstance(element).show());
-document.getElementById("confirmModal")?.addEventListener("show.bs.modal", event => {
+const confirmModalElement = document.getElementById("confirmModal");
+const resetConfirmModal = () => {
+  const form = document.getElementById("confirmModalForm");
+  const submit = document.getElementById("confirmModalSubmit");
+  const icon = document.getElementById("confirmModalIcon");
+  if (!form || !submit) return;
+  form.removeAttribute("action");
+  delete form.dataset.submitting;
+  document.getElementById("confirmModalTitle").textContent = "Confirmar acción";
+  document.getElementById("confirmModalCopy").textContent = "Esta acción conservará el historial.";
+  submit.textContent = "Confirmar";
+  submit.className = "btn btn-danger";
+  submit.disabled = true;
+  submit.removeAttribute("aria-busy");
+  delete submit.dataset.originalText;
+  icon?.classList.remove("warning");
+  document.body.classList.remove("modal-open");
+  document.querySelectorAll(".modal-backdrop").forEach(backdrop => backdrop.remove());
+};
+confirmModalElement?.addEventListener("show.bs.modal", event => {
   const trigger = event.relatedTarget;
-  document.getElementById("confirmModalForm").action = trigger.dataset.confirmUrl;
+  if (!trigger) return resetConfirmModal();
+  const form = document.getElementById("confirmModalForm");
+  const submit = document.getElementById("confirmModalSubmit");
+  const url = trigger.dataset.confirmUrl?.trim();
   document.getElementById("confirmModalTitle").textContent = trigger.dataset.confirmTitle || "Confirmar acción";
+  document.getElementById("confirmModalCopy").textContent = trigger.dataset.confirmCopy || "Esta acción conservará el historial.";
+  submit.textContent = trigger.dataset.confirmButton || "Confirmar";
+  const variant = trigger.dataset.confirmVariant === "warning" ? "warning" : "danger";
+  submit.className = `btn btn-${variant}`;
+  document.getElementById("confirmModalIcon")?.classList.toggle("warning", variant === "warning");
+  if (url) { form.action = url; submit.disabled = false; }
+  else { form.removeAttribute("action"); submit.disabled = true; }
 });
 
 if (window.AulaProOfertaOpciones) {
@@ -124,16 +153,4 @@ document.querySelectorAll("form").forEach(form => {
     });
   });
 });
-const confirmModal = document.getElementById("confirmModal");
-confirmModal?.addEventListener("hidden.bs.modal", () => {
-  const form = document.getElementById("confirmModalForm");
-  if (form) {
-    form.removeAttribute("action");
-    delete form.dataset.submitting;
-    form.querySelectorAll("button").forEach(button => {
-      button.disabled = false;
-      button.removeAttribute("aria-busy");
-      if (button.dataset.originalText) button.innerHTML = button.dataset.originalText;
-    });
-  }
-});
+confirmModalElement?.addEventListener("hidden.bs.modal", resetConfirmModal);

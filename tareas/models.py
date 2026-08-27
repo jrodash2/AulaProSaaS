@@ -35,6 +35,7 @@ class Tarea(models.Model):
         ordering=("-fecha_publicacion","fecha_limite");indexes=[models.Index(fields=("institucion","ciclo"),name="tarea_inst_ciclo_idx"),models.Index(fields=("institucion","estado"),name="tarea_inst_estado_idx"),models.Index(fields=("seccion","fecha_limite"),name="tarea_secc_limite_idx"),models.Index(fields=("asignacion_docente","estado"),name="tarea_asig_estado_idx")]
     def clean(self):
         e={};a=self.asignacion_docente if self.asignacion_docente_id else None
+        if self._state.adding and self.ciclo_id and self.ciclo.cerrado:e["ciclo"]="El ciclo está cerrado y no admite nuevas tareas."
         for f in ("ciclo","asignacion_docente","curso","grado","seccion"):
             o=getattr(self,f,None)
             if o and o.institucion_id!=self.institucion_id:e[f]="Debe pertenecer a la institución."

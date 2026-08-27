@@ -21,12 +21,13 @@
         <nav aria-label="breadcrumb"><ol class="breadcrumb small mb-4"><li class="breadcrumb-item"><a href="{% url 'core:inicio' %}">AulaPro</a></li><li class="breadcrumb-item active">{% block breadcrumb %}Inicio{% endblock %}</li></ol></nav>
         <div class="toast-container position-fixed top-0 end-0 p-3">{% for message in messages %}<div class="toast ap-toast toast-{{ message.tags|default:'info' }}" role="status" data-bs-autohide="true"><div class="toast-body"><i class="bi bi-check-circle"></i> {{ message }}<button class="btn-close ms-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button></div></div>{% endfor %}</div>
         {% block content %}{% endblock %}
-      {% include 'components/confirm_modal.html' %}
       </main>
       <footer class="app-footer">AulaPro · Administración educativa simple y segura</footer>
     </div>
   </div>
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  {# Los modales globales deben ser hijos directos de body: .ap-enter usa transform. #}
+  {% include 'components/confirm_modal.html' %}
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{% static 'js/aulapro.js' %}"></script>
   {% block scripts %}{% endblock %}

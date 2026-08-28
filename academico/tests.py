@@ -8,8 +8,8 @@ from django.urls import reverse
 from catalogos.models import CarreraCatalogo, CursoCatalogo, CursoPensum, GradoPensum, NivelEducativo, VersionPensum
 from instituciones.models import Institucion, UsuarioInstitucion
 
-from .models import CicloEscolar, CursoInstitucion, GradoInstitucion, JornadaInstitucion, OfertaAcademica, Seccion
-from .services import crear_oferta_desde_pensum, establecer_ciclo_actual
+from .models import CicloEscolar, CursoInstitucion, GradoInstitucion, JornadaInstitucion, OfertaAcademica, ResultadoAnualAlumno, Seccion
+from .services import crear_oferta_desde_pensum, establecer_ciclo_actual, obtener_grado_siguiente
 
 
 class AcademicoBase(TestCase):
@@ -74,6 +74,22 @@ class CicloEscolarTests(AcademicoBase):
     def test_fechas_invalidas_rechazadas(self):
         with self.assertRaises(ValidationError):
             CicloEscolar.objects.create(institucion=self.a, nombre="Inválido", anio=2029, fecha_inicio=date(2029, 10, 1), fecha_fin=date(2029, 1, 1))
+
+
+class PromocionTests(AcademicoBase):
+    def test_grado_siguiente_usa_orden_de_la_oferta(self):
+        oferta = self.crear_oferta()
+        primero, segundo = oferta.grados.order_by("orden")
+        self.assertEqual(obtener_grado_siguiente(primero), segundo)
+
+    def test_ultimo_grado_no_tiene_destino_interno(self):
+        ultimo = self.crear_oferta().grados.order_by("orden").last()
+        self.assertIsNone(obtener_grado_siguiente(ultimo))
+
+    def test_resultados_incluyen_egreso_y_decision_manual(self):
+        self.assertIn(("EGRESADO", "Egresado"), ResultadoAnualAlumno.Resultado.choices)
+        campo = ResultadoAnualAlumno._meta.get_field("resultado_final")
+        self.assertTrue(campo.null)
 
 
 class DetallesAcademicosTests(AcademicoBase):

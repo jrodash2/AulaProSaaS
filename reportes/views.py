@@ -25,6 +25,19 @@ def alumnos(request):
 @reporte_required("academico")
 def academico(request):
  ciclo,ctx=_base(request);ctx.update(sacademico.datos(request.institucion,ciclo) if ciclo else {});return render(request,"reportes/academico.html",ctx)
+def _resultados(request,ciclo):
+ from academico.models import ResultadoAnualAlumno
+ qs=ResultadoAnualAlumno.objects.filter(institucion=request.institucion,ciclo=ciclo,resultado_final__isnull=False).select_related("alumno","inscripcion__grado","inscripcion__seccion")
+ for key,lookup in (("oferta","inscripcion__oferta_academica_id"),("grado","inscripcion__grado_id"),("seccion","inscripcion__seccion_id"),("resultado","resultado_final")):
+  if request.GET.get(key):qs=qs.filter(**{lookup:request.GET[key]})
+ return qs
+@reporte_required("academico")
+def resultados_anuales(request):
+ ciclo,ctx=_base(request);ctx["resultados"]=_page(request,_resultados(request,ciclo));ctx["opciones"]=__import__("academico.models",fromlist=["ResultadoAnualAlumno"]).ResultadoAnualAlumno.Resultado.choices;return render(request,"reportes/resultados_anuales.html",ctx)
+@reporte_required("academico")
+def exportar_resultados_anuales(request):
+ ciclo,_=_base(request);data=[(r.alumno.nombre_completo,r.alumno.cui or "",r.inscripcion.grado.nombre,r.inscripcion.seccion.nombre,r.promedio_final,r.get_resultado_final_display()) for r in _resultados(request,ciclo)]
+ return excel_response(institucion=request.institucion,titulo="Resultados anuales",encabezados=("Alumno","CUI","Grado","Sección","Promedio","Resultado"),filas=data,nombre=f"resultados_anuales_{ciclo.anio}.xlsx",ciclo=ciclo,filtros=request.GET.urlencode())
 @reporte_required("asistencia")
 def asistencia(request):
  ciclo,ctx=_base(request);qs=sasistencia.registros(request.institucion,ciclo,request.GET,_asigs(request,ciclo));umbral=int(request.GET.get("umbral","80")) if request.GET.get("umbral","80").isdigit() else 80;umbral=max(0,min(100,umbral));ctx.update(sasistencia.resumen(qs));ctx["filas"]=_page(request,sasistencia.por_alumno(qs,umbral));ctx["umbral"]=umbral;return render(request,"reportes/asistencia.html",ctx)

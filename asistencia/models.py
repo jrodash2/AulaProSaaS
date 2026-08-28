@@ -49,6 +49,7 @@ class SesionAsistencia(models.Model):
 
     def clean(self):
         errors = {}
+        if self._state.adding and self.ciclo_id and self.ciclo.cerrado: errors["ciclo"] = "El ciclo está cerrado y no admite nuevas sesiones."
         related = (("ciclo", self.ciclo_id), ("oferta_academica", self.oferta_academica_id), ("grado", self.grado_id), ("seccion", self.seccion_id))
         for field, pk in related:
             if pk and getattr(self, field).institucion_id != self.institucion_id:

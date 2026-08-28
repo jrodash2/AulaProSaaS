@@ -72,3 +72,47 @@ def ejecutar_importacion(registro):
         if encargado: AlumnoEncargado.objects.get_or_create(institucion=registro.institucion,alumno=alumno,encargado=encargado,defaults={"parentesco":str(d["PARENTESCO"] or "OTRO").upper(),"parentesco_otro":"No especificado" if str(d["PARENTESCO"] or "OTRO").upper()=="OTRO" else "","es_principal":str(d["PRINCIPAL"] or "").upper() in ("SI","SÍ","1","TRUE"),"es_responsable_financiero":str(d["RESPONSABLE_FINANCIERO"] or "").upper() in ("SI","SÍ","1","TRUE")})
         g=fila["grado"]; Inscripcion.objects.create(institucion=registro.institucion,alumno=alumno,ciclo=registro.ciclo,oferta_academica=g.oferta,grado=g,seccion=fila["seccion"],fecha_inscripcion=timezone.localdate()); inscripciones+=1
     registro.estado=ImportacionAlumnos.Estado.PROCESADA; registro.total_filas=len(resultado["filas"]); registro.creados=creados; registro.actualizados=existentes; registro.inscripciones_creadas=inscripciones; registro.errores=0; registro.fecha_fin=timezone.now(); registro.save(); return registro
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.utils import timezone
+
+from academico.models import ResultadoAnualAlumno
+
+
+@transaction.atomic
+def reinscribir_alumno(*, resultado, ciclo_destino, seccion_destino):
+    """Crea la inscripción anual de forma tenant-safe e idempotente."""
+    from suscripciones.services import suscripcion_actual
+    from .models import Inscripcion
+
+    resultado = ResultadoAnualAlumno.objects.select_for_update().select_related("inscripcion", "alumno").get(pk=resultado.pk)
+    if resultado.institucion_id != ciclo_destino.institucion_id or seccion_destino.institucion_id != resultado.institucion_id:
+        raise ValidationError("Todos los datos deben pertenecer a la misma institución.")
+    if seccion_destino.ciclo_id != ciclo_destino.pk:
+        raise ValidationError("La sección no pertenece al ciclo destino.")
+    permitidos = (ResultadoAnualAlumno.Resultado.PROMOVIDO, ResultadoAnualAlumno.Resultado.NO_PROMOVIDO)
+    if resultado.resultado_final not in permitidos:
+        raise ValidationError("El resultado confirmado no es elegible para reinscripción.")
+    esperado = resultado.inscripcion.grado.orden + (1 if resultado.resultado_final == ResultadoAnualAlumno.Resultado.PROMOVIDO else 0)
+    if seccion_destino.grado.orden != esperado:
+        raise ValidationError("El grado destino no corresponde a la promoción propuesta.")
+    existente = Inscripcion.objects.filter(alumno=resultado.alumno, ciclo=ciclo_destino, estado=Inscripcion.Estado.ACTIVA).first()
+    if existente:
+        return existente, False
+    ocupados = Inscripcion.objects.select_for_update().filter(seccion=seccion_destino, estado=Inscripcion.Estado.ACTIVA).count()
+    if seccion_destino.capacidad is not None and ocupados >= seccion_destino.capacidad:
+        raise ValidationError("La sección destino no tiene capacidad disponible.")
+    suscripcion = suscripcion_actual(resultado.institucion)
+    usados = Inscripcion.objects.filter(institucion=resultado.institucion, ciclo=ciclo_destino, estado=Inscripcion.Estado.ACTIVA).count()
+    if suscripcion and suscripcion.limite_alumnos is not None and usados + 1 > suscripcion.limite_alumnos:
+        raise ValidationError("La reinscripción excede el límite de alumnos del plan.")
+    inscripcion = Inscripcion.objects.create(institucion=resultado.institucion, alumno=resultado.alumno, ciclo=ciclo_destino,
+        oferta_academica=seccion_destino.grado.oferta, grado=seccion_destino.grado, seccion=seccion_destino,
+        fecha_inscripcion=timezone.localdate(), estado=Inscripcion.Estado.ACTIVA, es_reingreso=True)
+    return inscripcion, True
+
+
+@transaction.atomic
+def reinscripcion_masiva(*, asignaciones):
+    """Procesa (resultado, ciclo, sección) en una única transacción."""
+    return [reinscribir_alumno(resultado=r, ciclo_destino=c, seccion_destino=s) for r, c, s in asignaciones]

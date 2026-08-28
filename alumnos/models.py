@@ -184,8 +184,13 @@ class Inscripcion(models.Model):
             Institucion.objects.select_for_update().get(pk=self.institucion_id)
             activa_nueva=self.estado==self.Estado.ACTIVA and (not self.pk or not type(self).objects.filter(pk=self.pk,estado=self.Estado.ACTIVA).exists())
             if activa_nueva:
-                from suscripciones.services import validar_cupo_alumnos
-                validar_cupo_alumnos(self.institucion,1)
+                from suscripciones.services import suscripcion_actual
+                suscripcion = suscripcion_actual(self.institucion)
+                usados = type(self).objects.filter(institucion=self.institucion, ciclo=self.ciclo, estado=self.Estado.ACTIVA).count()
+                if suscripcion and suscripcion.limite_alumnos is not None and usados + 1 > suscripcion.limite_alumnos:
+                    raise ValidationError(f"Has alcanzado el límite de {suscripcion.limite_alumnos} estudiantes para este ciclo.")
+            if self.ciclo_id and self.ciclo.cerrado and self.estado in (self.Estado.BORRADOR, self.Estado.ACTIVA):
+                raise ValidationError("Un ciclo cerrado no admite nuevas inscripciones activas.")
             self.full_clean(); return super().save(*args,**kwargs)
 
 

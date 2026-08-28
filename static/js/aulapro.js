@@ -36,41 +36,63 @@ document.addEventListener("click", event => {
   }
 });
 
+function initConfirmModal() {
+  const modal = document.getElementById("confirmModal");
+  if (!modal || modal.dataset.initialized === "true") return;
+  const form = modal.querySelector("#confirmModalForm");
+  const submit = modal.querySelector("#confirmModalSubmit");
+  const title = modal.querySelector("#confirmModalTitle");
+  const copy = modal.querySelector("#confirmModalCopy");
+  const icon = modal.querySelector("#confirmModalIcon");
+  if (!form || !submit || !title || !copy) return;
+  modal.dataset.initialized = "true";
+
+  const reset = () => {
+    form.removeAttribute("action");
+    delete form.dataset.submitting;
+    title.textContent = "Confirmar acción";
+    copy.textContent = "Esta acción conservará el historial.";
+    submit.textContent = "Confirmar";
+    submit.classList.remove("btn-warning");
+    submit.classList.add("btn-danger");
+    submit.disabled = true;
+    submit.removeAttribute("aria-busy");
+    delete submit.dataset.originalText;
+    icon?.classList.remove("warning");
+  };
+
+  const prepare = source => {
+    const trigger = source?.closest?.("[data-confirm-url]") || source;
+    const url = trigger?.getAttribute ? trigger.getAttribute("data-confirm-url")?.trim() : "";
+    title.textContent = trigger?.getAttribute ? trigger.getAttribute("data-confirm-title") || "Confirmar acción" : "Confirmar acción";
+    copy.textContent = trigger?.getAttribute ? trigger.getAttribute("data-confirm-copy") || "Esta acción conservará el historial." : "Esta acción conservará el historial.";
+    submit.textContent = trigger?.getAttribute ? trigger.getAttribute("data-confirm-button") || "Confirmar" : "Confirmar";
+    const variant = trigger?.getAttribute && trigger.getAttribute("data-confirm-variant") === "warning" ? "warning" : "danger";
+    submit.classList.remove("btn-danger", "btn-warning");
+    submit.classList.add(`btn-${variant}`);
+    icon?.classList.toggle("warning", variant === "warning");
+    if (url) {
+      form.setAttribute("action", url);
+      submit.disabled = false;
+    } else {
+      form.removeAttribute("action");
+      submit.disabled = true;
+      if (modal.dataset.debug === "true") console.warn("Confirm modal trigger missing data-confirm-url");
+    }
+  };
+
+  document.addEventListener("click", event => {
+    const trigger = event.target.closest?.('[data-bs-target="#confirmModal"][data-confirm-url]');
+    if (trigger) prepare(trigger);
+  });
+  modal.addEventListener("show.bs.modal", event => prepare(event.relatedTarget));
+  modal.addEventListener("hidden.bs.modal", reset);
+  reset();
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initConfirmModal);
+else initConfirmModal();
+
 document.querySelectorAll(".toast").forEach(element => bootstrap.Toast.getOrCreateInstance(element).show());
-const confirmModalElement = document.getElementById("confirmModal");
-const resetConfirmModal = () => {
-  const form = document.getElementById("confirmModalForm");
-  const submit = document.getElementById("confirmModalSubmit");
-  const icon = document.getElementById("confirmModalIcon");
-  if (!form || !submit) return;
-  form.removeAttribute("action");
-  delete form.dataset.submitting;
-  document.getElementById("confirmModalTitle").textContent = "Confirmar acción";
-  document.getElementById("confirmModalCopy").textContent = "Esta acción conservará el historial.";
-  submit.textContent = "Confirmar";
-  submit.className = "btn btn-danger";
-  submit.disabled = true;
-  submit.removeAttribute("aria-busy");
-  delete submit.dataset.originalText;
-  icon?.classList.remove("warning");
-  document.body.classList.remove("modal-open");
-  document.querySelectorAll(".modal-backdrop").forEach(backdrop => backdrop.remove());
-};
-confirmModalElement?.addEventListener("show.bs.modal", event => {
-  const trigger = event.relatedTarget;
-  if (!trigger) return resetConfirmModal();
-  const form = document.getElementById("confirmModalForm");
-  const submit = document.getElementById("confirmModalSubmit");
-  const url = trigger.dataset.confirmUrl?.trim();
-  document.getElementById("confirmModalTitle").textContent = trigger.dataset.confirmTitle || "Confirmar acción";
-  document.getElementById("confirmModalCopy").textContent = trigger.dataset.confirmCopy || "Esta acción conservará el historial.";
-  submit.textContent = trigger.dataset.confirmButton || "Confirmar";
-  const variant = trigger.dataset.confirmVariant === "warning" ? "warning" : "danger";
-  submit.className = `btn btn-${variant}`;
-  document.getElementById("confirmModalIcon")?.classList.toggle("warning", variant === "warning");
-  if (url) { form.action = url; submit.disabled = false; }
-  else { form.removeAttribute("action"); submit.disabled = true; }
-});
 
 if (window.AulaProOfertaOpciones) {
   const nivel = document.getElementById("id_nivel");
@@ -153,4 +175,3 @@ document.querySelectorAll("form").forEach(form => {
     });
   });
 });
-confirmModalElement?.addEventListener("hidden.bs.modal", resetConfirmModal);

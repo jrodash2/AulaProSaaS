@@ -174,6 +174,47 @@ def reinscripciones_procesar(request,ciclo_destino):
     return redirect("alumnos:reinscripciones_detalle",ciclo_destino=destino.pk)
 
 @gestion_alumnos_required
+def reinscripciones_inicio(request):
+    ciclos=CicloEscolar.objects.filter(institucion=request.institucion).order_by("-anio")
+    destino=get_object_or_404(ciclos,pk=request.GET["ciclo_destino"]) if request.GET.get("ciclo_destino") else ciclos.filter(estado=CicloEscolar.Estado.PLANIFICACION).first()
+    if destino:return redirect("alumnos:reinscripciones_detalle",ciclo_destino=destino.pk)
+    return render(request,"alumnos/reinscripciones_inicio.html",{"ciclos":ciclos})
+
+def _reinscripciones_contexto(request,destino):
+    origen=CicloEscolar.objects.filter(institucion=request.institucion,anio__lt=destino.anio,cerrado=True).order_by("-anio").first()
+    resultados=ResultadoAnualAlumno.objects.none() if not origen else origen.resultados_anuales.select_related("alumno","inscripcion__grado","inscripcion__seccion").filter(resultado_final__in=("PROMOVIDO","NO_PROMOVIDO","EGRESADO"))
+    filas=[]
+    for r in resultados:
+        orden=r.inscripcion.grado.orden+(1 if r.resultado_final=="PROMOVIDO" else 0)
+        grado=destino.grados.filter(orden=orden).first() if r.resultado_final!="EGRESADO" else None
+        existente=Inscripcion.objects.filter(alumno=r.alumno,ciclo=destino,estado="ACTIVA").first()
+        filas.append({"resultado":r,"grado":grado,"secciones":destino.secciones.filter(grado=grado,activa=True).annotate(ocupados=Count("inscripciones",filter=Q(inscripciones__estado="ACTIVA"))) if grado else [],"existente":existente})
+    sus=suscripcion_actual(request.institucion);usados=Inscripcion.objects.filter(institucion=request.institucion,ciclo=destino,estado="ACTIVA").count()
+    return {"destino":destino,"origen":origen,"filas":filas,"elegibles":sum(1 for x in filas if x["grado"]),"egresados":sum(1 for x in filas if not x["grado"]),"ya_inscritos":sum(1 for x in filas if x["existente"]),"suscripcion":sus,"usados":usados}
+
+@gestion_alumnos_required
+def reinscripciones_detalle(request,ciclo_destino):
+    destino=get_object_or_404(CicloEscolar,institucion=request.institucion,pk=ciclo_destino,cerrado=False)
+    return render(request,"alumnos/reinscripciones.html",_reinscripciones_contexto(request,destino))
+
+@gestion_alumnos_required
+@require_POST
+def reinscripciones_procesar(request,ciclo_destino):
+    destino=get_object_or_404(CicloEscolar,institucion=request.institucion,pk=ciclo_destino,cerrado=False)
+    asignaciones=[]
+    for rid in request.POST.getlist("resultado"):
+        resultado=get_object_or_404(ResultadoAnualAlumno,institucion=request.institucion,pk=rid)
+        seccion=get_object_or_404(Seccion,institucion=request.institucion,ciclo=destino,pk=request.POST.get(f"seccion_{rid}"))
+        asignaciones.append((resultado,destino,seccion))
+    try: procesadas=reinscripcion_masiva(asignaciones=asignaciones)
+    except ValidationError as exc: messages.error(request,"; ".join(exc.messages))
+    else:
+        creadas=sum(1 for _,creada in procesadas if creada);omitidas=len(procesadas)-creadas
+        registrar_evento(request,"REINSCRIPCION_MASIVA",destino,{"ciclo_destino":destino.anio,"alumnos":creadas})
+        messages.success(request,f"Reinscripción completada: {creadas} creadas, {omitidas} ya existentes.")
+    return redirect("alumnos:reinscripciones_detalle",ciclo_destino=destino.pk)
+
+@gestion_alumnos_required
 def editar(request,pk):
     alumno=get_object_or_404(_alumnos(request),pk=pk); form=AlumnoForm(request.POST or None,request.FILES or None,instance=alumno,institucion=request.institucion)
     form.instance.institucion=request.institucion

@@ -491,6 +491,43 @@ class Command(BaseCommand):
         for index, alumno in enumerate(alumnos[:3]):
             DocumentoAlumno.objects.get_or_create(institucion=institucion, alumno=alumno, tipo_documento=partida, defaults={"estado": "RECHAZADO" if index == 2 else "APROBADO", "motivo_rechazo": "Archivo ilegible." if index == 2 else "", "cargado_por": admin, "revisado_por": admin, "fecha_revision": timezone.now()})
 
+        # Horario demo idempotente. La asignación docente sigue siendo la fuente
+        # de verdad del curso y profesor; no se duplican esos datos en la clase.
+        from horarios.models import Aula, BloqueHorario, HorarioClase
+        aula_demo, _ = Aula.objects.update_or_create(
+            institucion=institucion,
+            codigo="AULA-1",
+            defaults={"nombre": "Aula 1", "capacidad": 35, "activa": True},
+        )
+        Aula.objects.update_or_create(
+            institucion=institucion,
+            codigo="LAB",
+            defaults={"nombre": "Laboratorio", "capacidad": 24, "activa": True},
+        )
+        bloques_demo = []
+        for orden, inicio, fin in ((10, time(7, 0), time(7, 45)), (20, time(7, 45), time(8, 30)), (30, time(8, 50), time(9, 35))):
+            bloque, _ = BloqueHorario.objects.update_or_create(
+                institucion=institucion,
+                jornada=jornada,
+                orden=orden,
+                defaults={"nombre": f"Período {orden // 10}", "hora_inicio": inicio, "hora_fin": fin, "tipo": "CLASE", "activo": True},
+            )
+            bloques_demo.append(bloque)
+        BloqueHorario.objects.update_or_create(
+            institucion=institucion,
+            jornada=jornada,
+            orden=25,
+            defaults={"nombre": "Recreo", "hora_inicio": time(8, 30), "hora_fin": time(8, 50), "tipo": "RECREO", "activo": True},
+        )
+        for dia, bloque in zip(("LUNES", "MIERCOLES", "VIERNES"), bloques_demo):
+            HorarioClase.objects.update_or_create(
+                institucion=institucion,
+                seccion=seccion,
+                dia_semana=dia,
+                bloque=bloque,
+                defaults={"ciclo": ciclo, "jornada": jornada, "asignacion_docente": asignacion, "aula": aula_demo, "activo": True},
+            )
+
         self.stdout.write(self.style.SUCCESS("Datos demo de AulaPro creados/actualizados correctamente."))
         self.stdout.write("")
         self.stdout.write("Institución: Colegio Demo AulaPro")

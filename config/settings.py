@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "comunicaciones",
     "reportes",
     "suscripciones",
+    "horarios",
 ]
 
 MIDDLEWARE = [

@@ -85,3 +85,16 @@ def exportar_asistencia(request):
 def exportar_finanzas(request):
  _,_= _base(request);d=sfinanzas.datos(request.institucion,request.GET);rows=[(c.alumno.nombre_completo,c.descripcion,c.monto_total,c.pagado_calc,c.saldo_calc,c.vencido_calc,c.dias_vencido) for c in d["cargos"]]
  return excel_response(institucion=request.institucion,titulo="Cuentas por cobrar",encabezados=("Alumno","Concepto","Cargo","Pagado","Saldo","Saldo vencido","Días vencido"),filas=rows,nombre=f"aulapro_morosidad_{timezone.localdate()}.xlsx",filtros=request.GET.urlencode())
+
+@reporte_required("academico")
+def horarios(request):
+ from django.core.exceptions import PermissionDenied
+ from academico.models import Seccion
+ from horarios.services import validar_carga_semanal
+ from suscripciones.services import modulo_habilitado
+ if not modulo_habilitado(request.institucion,"HORARIOS"):raise PermissionDenied
+ ciclo,ctx=_base(request);filas=[]
+ for seccion in Seccion.objects.filter(institucion=request.institucion,ciclo=ciclo,activa=True).select_related("grado","jornada"):
+  carga=validar_carga_semanal(seccion);filas.append({"seccion":seccion,"carga":carga,"completa":bool(carga) and all(not x["faltan"] and not x["exceso"] for x in carga)})
+ ctx["filas"]=filas;ctx["completas"]=sum(f["completa"] for f in filas);ctx["incompletas"]=len(filas)-ctx["completas"]
+ return render(request,"reportes/horarios.html",ctx)

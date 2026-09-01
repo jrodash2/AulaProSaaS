@@ -116,3 +116,40 @@ def reinscribir_alumno(*, resultado, ciclo_destino, seccion_destino):
 def reinscripcion_masiva(*, asignaciones):
     """Procesa (resultado, ciclo, sección) en una única transacción."""
     return [reinscribir_alumno(resultado=r, ciclo_destino=c, seccion_destino=s) for r, c, s in asignaciones]
+
+
+def requisitos_aplicables(alumno, inscripcion=None, visible_portal=False):
+    from django.db.models import Q
+    from .models import RequisitoDocumentoAlumno
+    inscripcion = inscripcion or alumno.inscripciones.filter(estado="ACTIVA").select_related("ciclo","oferta_academica__nivel","grado").first()
+    qs=RequisitoDocumentoAlumno.objects.filter(institucion=alumno.institucion,activo=True,tipo_documento__activo=True).select_related("tipo_documento")
+    if visible_portal:qs=qs.filter(tipo_documento__visible_portal=True)
+    if not inscripcion:return qs.filter(aplica_a_nivel__isnull=True,aplica_a_oferta__isnull=True,aplica_a_grado__isnull=True,aplica_a_ciclo__isnull=True)
+    return qs.filter(Q(aplica_a_nivel__isnull=True)|Q(aplica_a_nivel=inscripcion.oferta_academica.nivel),Q(aplica_a_oferta__isnull=True)|Q(aplica_a_oferta=inscripcion.oferta_academica),Q(aplica_a_grado__isnull=True)|Q(aplica_a_grado=inscripcion.grado),Q(aplica_a_ciclo__isnull=True)|Q(aplica_a_ciclo=inscripcion.ciclo)).distinct()
+
+
+def resumen_expediente(alumno, inscripcion=None, visible_portal=False):
+    from .models import DocumentoAlumno
+    requisitos=list(requisitos_aplicables(alumno,inscripcion,visible_portal));items=[];aprobados=denominador=pendientes=rechazados=0
+    for req in requisitos:
+        documentos=alumno.documentos.filter(tipo_documento=req.tipo_documento).order_by("-fecha_carga")
+        if req.aplica_a_ciclo_id:documentos=documentos.filter(ciclo_id=req.aplica_a_ciclo_id)
+        documento=documentos.first();estado=documento.estado_vigente if documento else DocumentoAlumno.Estado.PENDIENTE
+        obligatorio=req.obligatorio
+        if estado==DocumentoAlumno.Estado.NO_APLICA:obligatorio=False
+        if obligatorio:
+            denominador+=1
+            if estado==DocumentoAlumno.Estado.APROBADO:aprobados+=1
+            else:pendientes+=1
+        if estado==DocumentoAlumno.Estado.RECHAZADO:rechazados+=1
+        items.append({"requisito":req,"documento":documento,"estado":estado,"obligatorio":obligatorio})
+    porcentaje=round(aprobados*100/denominador) if denominador else 100
+    return {"items":items,"aprobados":aprobados,"total":denominador,"pendientes":pendientes,"rechazados":rechazados,"porcentaje":porcentaje,"completo":porcentaje==100}
+
+
+def documentos_por_vencer(institucion,dias=30):
+    from datetime import timedelta
+    from django.utils import timezone
+    from .models import DocumentoAlumno
+    hoy=timezone.localdate()
+    return DocumentoAlumno.objects.filter(institucion=institucion,estado=DocumentoAlumno.Estado.APROBADO,fecha_vencimiento__range=(hoy,hoy+timedelta(days=dias)))

@@ -3,6 +3,9 @@ from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, RegexValidator
 from django.db import models, transaction
 from django.db.models import Q
+from django.utils import timezone
+import os
+import uuid
 
 cui_validator = RegexValidator(r"^\d{13}$", "El CUI debe contener exactamente 13 dígitos.")
 
@@ -210,3 +213,83 @@ class ImportacionAlumnos(models.Model):
         if self.ciclo_id and self.ciclo.institucion_id != self.institucion_id:
             raise ValidationError({"ciclo":"El ciclo de importación no pertenece a la institución."})
     def save(self,*args,**kwargs): self.full_clean(); return super().save(*args,**kwargs)
+
+
+class TipoDocumentoAlumno(models.Model):
+    institucion=models.ForeignKey("instituciones.Institucion",on_delete=models.CASCADE,related_name="tipos_documento_alumno")
+    codigo=models.CharField(max_length=40);nombre=models.CharField(max_length=140);descripcion=models.TextField(blank=True)
+    obligatorio=models.BooleanField(default=True);requiere_vigencia=models.BooleanField(default=False);permite_multiples=models.BooleanField(default=False);visible_portal=models.BooleanField(default=False);activo=models.BooleanField(default=True);orden=models.PositiveSmallIntegerField(default=0)
+    fecha_creacion=models.DateTimeField(auto_now_add=True);fecha_actualizacion=models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering=("orden","nombre");constraints=[models.UniqueConstraint(fields=("institucion","codigo"),name="tipo_doc_codigo_unico_inst")]
+    def save(self,*a,**kw):self.codigo=self.codigo.upper().strip();self.full_clean();return super().save(*a,**kw)
+    def __str__(self):return self.nombre
+
+
+class RequisitoDocumentoAlumno(models.Model):
+    institucion=models.ForeignKey("instituciones.Institucion",on_delete=models.CASCADE,related_name="requisitos_documentales")
+    tipo_documento=models.ForeignKey(TipoDocumentoAlumno,on_delete=models.PROTECT,related_name="requisitos")
+    obligatorio=models.BooleanField(default=True)
+    aplica_a_nivel=models.ForeignKey("catalogos.NivelEducativo",null=True,blank=True,on_delete=models.PROTECT,related_name="requisitos_documentales")
+    aplica_a_oferta=models.ForeignKey("academico.OfertaAcademica",null=True,blank=True,on_delete=models.PROTECT,related_name="requisitos_documentales")
+    aplica_a_grado=models.ForeignKey("academico.GradoInstitucion",null=True,blank=True,on_delete=models.PROTECT,related_name="requisitos_documentales")
+    aplica_a_ciclo=models.ForeignKey("academico.CicloEscolar",null=True,blank=True,on_delete=models.PROTECT,related_name="requisitos_documentales")
+    activo=models.BooleanField(default=True);fecha_creacion=models.DateTimeField(auto_now_add=True);fecha_actualizacion=models.DateTimeField(auto_now=True)
+    class Meta:constraints=[models.UniqueConstraint(fields=("institucion","tipo_documento","aplica_a_nivel","aplica_a_oferta","aplica_a_grado","aplica_a_ciclo"),name="requisito_doc_alcance_unico")]
+    def clean(self):
+        e={}
+        if self.tipo_documento_id and self.tipo_documento.institucion_id!=self.institucion_id:e["tipo_documento"]="El tipo no pertenece a la institución."
+        for campo in ("aplica_a_oferta","aplica_a_grado","aplica_a_ciclo"):
+            obj=getattr(self,campo,None)
+            if obj and obj.institucion_id!=self.institucion_id:e[campo]="El alcance no pertenece a la institución."
+        if e:raise ValidationError(e)
+    def save(self,*a,**kw):self.full_clean();return super().save(*a,**kw)
+
+
+EXTENSIONES_DOCUMENTO=("pdf","jpg","jpeg","png","webp")
+def ruta_documento_alumno(instance,filename):
+    ext=os.path.splitext(filename)[1].lower()
+    return f"alumnos/documentos/{instance.institucion_id}/{instance.alumno_id}/{uuid.uuid4().hex}{ext}"
+def validar_documento_alumno(archivo):
+    ext=os.path.splitext(archivo.name)[1].lower().lstrip(".")
+    if ext not in EXTENSIONES_DOCUMENTO:raise ValidationError("Solo se permiten archivos PDF, JPG, PNG o WEBP.")
+    if archivo.size>getattr(settings,"DOCUMENTO_ALUMNO_MAX_SIZE",10*1024*1024):raise ValidationError("El archivo no puede superar 10 MB.")
+    cabecera=archivo.read(16);archivo.seek(0)
+    firmas={"pdf":(b"%PDF",),"jpg":(b"\xff\xd8\xff",),"jpeg":(b"\xff\xd8\xff",),"png":(b"\x89PNG\r\n\x1a\n",),"webp":(b"RIFF",)}
+    if not any(cabecera.startswith(firma) for firma in firmas[ext]):raise ValidationError("El contenido no coincide con el tipo de archivo permitido.")
+    if ext=="webp" and cabecera[8:12]!=b"WEBP":raise ValidationError("El contenido no corresponde a una imagen WEBP.")
+
+
+class DocumentoAlumno(models.Model):
+    class Estado(models.TextChoices):
+        PENDIENTE="PENDIENTE","Pendiente";ENTREGADO="ENTREGADO","Entregado";APROBADO="APROBADO","Aprobado";RECHAZADO="RECHAZADO","Rechazado";VENCIDO="VENCIDO","Vencido";NO_APLICA="NO_APLICA","No aplica"
+    institucion=models.ForeignKey("instituciones.Institucion",on_delete=models.CASCADE,related_name="documentos_alumnos")
+    alumno=models.ForeignKey(Alumno,on_delete=models.PROTECT,related_name="documentos")
+    tipo_documento=models.ForeignKey(TipoDocumentoAlumno,on_delete=models.PROTECT,related_name="documentos")
+    inscripcion=models.ForeignKey(Inscripcion,null=True,blank=True,on_delete=models.PROTECT,related_name="documentos")
+    ciclo=models.ForeignKey("academico.CicloEscolar",null=True,blank=True,on_delete=models.PROTECT,related_name="documentos_alumnos")
+    estado=models.CharField(max_length=12,choices=Estado.choices,default=Estado.ENTREGADO)
+    archivo=models.FileField(upload_to=ruta_documento_alumno,validators=[FileExtensionValidator(EXTENSIONES_DOCUMENTO),validar_documento_alumno],blank=True)
+    nombre_original=models.CharField(max_length=255,blank=True);numero_documento=models.CharField(max_length=100,blank=True)
+    fecha_emision=models.DateField(null=True,blank=True);fecha_vencimiento=models.DateField(null=True,blank=True)
+    observaciones=models.TextField(blank=True);motivo_rechazo=models.TextField(blank=True)
+    cargado_por=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,on_delete=models.SET_NULL,related_name="documentos_alumno_cargados")
+    revisado_por=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,blank=True,on_delete=models.SET_NULL,related_name="documentos_alumno_revisados")
+    fecha_carga=models.DateTimeField(auto_now_add=True);fecha_revision=models.DateTimeField(null=True,blank=True);fecha_actualizacion=models.DateTimeField(auto_now=True)
+    reemplaza_a=models.ForeignKey("self",null=True,blank=True,on_delete=models.PROTECT,related_name="reemplazos")
+    class Meta:ordering=("-fecha_carga",);indexes=[models.Index(fields=("institucion","alumno","estado"),name="doc_alumno_estado_idx")]
+    @property
+    def estado_vigente(self):
+        return self.Estado.VENCIDO if self.fecha_vencimiento and self.fecha_vencimiento<timezone.localdate() and self.estado==self.Estado.APROBADO else self.estado
+    def clean(self):
+        e={}
+        if self.alumno_id and self.alumno.institucion_id!=self.institucion_id:e["alumno"]="El alumno no pertenece a la institución."
+        if self.tipo_documento_id and self.tipo_documento.institucion_id!=self.institucion_id:e["tipo_documento"]="El tipo no pertenece a la institución."
+        if self.inscripcion_id and (self.inscripcion.institucion_id!=self.institucion_id or self.inscripcion.alumno_id!=self.alumno_id):e["inscripcion"]="La inscripción no corresponde al alumno."
+        if self.ciclo_id and self.ciclo.institucion_id!=self.institucion_id:e["ciclo"]="El ciclo no pertenece a la institución."
+        if self.estado==self.Estado.RECHAZADO and not self.motivo_rechazo.strip():e["motivo_rechazo"]="Indique el motivo del rechazo."
+        if self.estado==self.Estado.NO_APLICA and not self.observaciones.strip():e["observaciones"]="Indique por qué no aplica."
+        if e:raise ValidationError(e)
+    def save(self,*a,**kw):
+        if self.archivo and not self.nombre_original:self.nombre_original=os.path.basename(self.archivo.name)[:255]
+        self.full_clean();return super().save(*a,**kw)

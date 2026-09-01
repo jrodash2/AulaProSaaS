@@ -22,9 +22,39 @@ def dashboard(request):
 @reporte_required("alumnos")
 def alumnos(request):
  ciclo,ctx=_base(request);qs=salumnos.queryset(request.institucion,ciclo,request.GET);ctx.update(salumnos.estadisticas(request.institucion,qs));ctx["filas"]=_page(request,salumnos.filas(qs,ciclo));ctx["inscripciones"]=_page(request,salumnos.inscripciones(request.institucion,ciclo,request.GET));return render(request,"reportes/alumnos.html",ctx)
+@reporte_required("alumnos")
+def expedientes(request):
+ from alumnos.models import Alumno,DocumentoAlumno
+ from alumnos.services import resumen_expediente
+ from suscripciones.services import modulo_habilitado
+ if not modulo_habilitado(request.institucion,"EXPEDIENTE"):raise __import__('django.core.exceptions',fromlist=['PermissionDenied']).PermissionDenied
+ ciclo,ctx=_base(request);rows=[]
+ for alumno in Alumno.objects.filter(institucion=request.institucion):rows.append((alumno,resumen_expediente(alumno)))
+ ctx["filas"]=rows;ctx["completos"]=sum(r["completo"] for _,r in rows);ctx["incompletos"]=len(rows)-ctx["completos"];ctx["pendientes"]=sum(r["pendientes"] for _,r in rows);ctx["rechazados"]=DocumentoAlumno.objects.filter(institucion=request.institucion,estado="RECHAZADO").count();ctx["vencidos"]=sum(1 for d in DocumentoAlumno.objects.filter(institucion=request.institucion,estado="APROBADO") if d.estado_vigente=="VENCIDO");return render(request,"reportes/expedientes.html",ctx)
+@reporte_required("alumnos")
+def exportar_expedientes(request):
+ from alumnos.models import Alumno
+ from alumnos.services import resumen_expediente
+ data=[]
+ for a in Alumno.objects.filter(institucion=request.institucion):
+  r=resumen_expediente(a);i=a.inscripciones.filter(estado="ACTIVA").select_related("grado","seccion").first();data.append((a.nombre_completo,a.cui or "",i.grado.nombre if i else "",i.seccion.nombre if i else "",r["porcentaje"],r["pendientes"],r["rechazados"]))
+ return excel_response(institucion=request.institucion,titulo="Expedientes documentales",encabezados=("Alumno","CUI","Grado","Sección","Completitud","Pendientes","Rechazados"),filas=data,nombre="expedientes_aulapro.xlsx",filtros=request.GET.urlencode())
 @reporte_required("academico")
 def academico(request):
  ciclo,ctx=_base(request);ctx.update(sacademico.datos(request.institucion,ciclo) if ciclo else {});return render(request,"reportes/academico.html",ctx)
+def _resultados(request,ciclo):
+ from academico.models import ResultadoAnualAlumno
+ qs=ResultadoAnualAlumno.objects.filter(institucion=request.institucion,ciclo=ciclo,resultado_final__isnull=False).select_related("alumno","inscripcion__grado","inscripcion__seccion")
+ for key,lookup in (("oferta","inscripcion__oferta_academica_id"),("grado","inscripcion__grado_id"),("seccion","inscripcion__seccion_id"),("resultado","resultado_final")):
+  if request.GET.get(key):qs=qs.filter(**{lookup:request.GET[key]})
+ return qs
+@reporte_required("academico")
+def resultados_anuales(request):
+ ciclo,ctx=_base(request);ctx["resultados"]=_page(request,_resultados(request,ciclo));ctx["opciones"]=__import__("academico.models",fromlist=["ResultadoAnualAlumno"]).ResultadoAnualAlumno.Resultado.choices;return render(request,"reportes/resultados_anuales.html",ctx)
+@reporte_required("academico")
+def exportar_resultados_anuales(request):
+ ciclo,_=_base(request);data=[(r.alumno.nombre_completo,r.alumno.cui or "",r.inscripcion.grado.nombre,r.inscripcion.seccion.nombre,r.promedio_final,r.get_resultado_final_display()) for r in _resultados(request,ciclo)]
+ return excel_response(institucion=request.institucion,titulo="Resultados anuales",encabezados=("Alumno","CUI","Grado","Sección","Promedio","Resultado"),filas=data,nombre=f"resultados_anuales_{ciclo.anio}.xlsx",ciclo=ciclo,filtros=request.GET.urlencode())
 @reporte_required("asistencia")
 def asistencia(request):
  ciclo,ctx=_base(request);qs=sasistencia.registros(request.institucion,ciclo,request.GET,_asigs(request,ciclo));umbral=int(request.GET.get("umbral","80")) if request.GET.get("umbral","80").isdigit() else 80;umbral=max(0,min(100,umbral));ctx.update(sasistencia.resumen(qs));ctx["filas"]=_page(request,sasistencia.por_alumno(qs,umbral));ctx["umbral"]=umbral;return render(request,"reportes/asistencia.html",ctx)

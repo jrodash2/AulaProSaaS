@@ -19,6 +19,7 @@ class ModuloSaaS(models.Model):
         PORTAL = "PORTAL", "Portal familiar"
         COMUNICACIONES = "COMUNICACIONES", "Comunicaciones"
         REPORTES = "REPORTES", "Reportes"
+        EXPEDIENTE = "EXPEDIENTE", "Expediente digital"
 
     codigo = models.CharField(max_length=24, choices=Codigo.choices, unique=True)
     nombre = models.CharField(max_length=80)

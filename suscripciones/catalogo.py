@@ -9,6 +9,7 @@ MODULOS_OFICIALES = (
     ("PORTAL", "Portal familiar", 8, "Acceso seguro para padres y alumnos.", "bi-people"),
     ("COMUNICACIONES", "Comunicaciones", 9, "Avisos y notificaciones institucionales.", "bi-megaphone"),
     ("REPORTES", "Reportes", 10, "Analítica y reportes consolidados.", "bi-bar-chart"),
+    ("EXPEDIENTE", "Expediente digital", 11, "Gestión de documentos y requisitos de estudiantes.", "bi-folder2-open"),
 )
 
 MODULOS_POR_PLAN = {

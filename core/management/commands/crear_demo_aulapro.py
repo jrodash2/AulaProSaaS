@@ -41,6 +41,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--password", default=DEFAULT_PASSWORD)
+        parser.add_argument("--allow-production-demo", action="store_true", help="Alias compatible para permitir datos demo en producción.")
         parser.add_argument(
             "--permitir-produccion",
             action="store_true",
@@ -49,13 +50,20 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        if not settings.DEBUG and not options["permitir_produccion"]:
+        if not settings.DEBUG and not (options["permitir_produccion"] or options["allow_production_demo"]):
             raise CommandError(
                 "Por seguridad, este comando solo se ejecuta con DEBUG=True. "
                 "Use --permitir-produccion únicamente en un entorno demo controlado."
             )
 
         password = options["password"]
+        # Mantiene compatibilidad con el comando demo histórico del módulo tareas.
+        # Django resuelve nombres de comandos duplicados según INSTALLED_APPS.
+        if options["allow_production_demo"]:
+            from tareas.management.commands.crear_demo_aulapro import Command as TareasDemoCommand
+            comando = TareasDemoCommand(); comando.stdout = self.stdout; comando.stderr = self.stderr
+            comando.handle(allow_production_demo=True)
+            return
         User = get_user_model()
 
         institucion, _ = Institucion.objects.update_or_create(
@@ -474,6 +482,14 @@ class Command(BaseCommand):
                     "registrado_por": docente_usuario,
                 },
             )
+
+        from alumnos.models import DocumentoAlumno, RequisitoDocumentoAlumno, TipoDocumentoAlumno
+        for orden, (codigo, nombre) in enumerate((("PARTIDA", "Partida de nacimiento"), ("FOTOGRAFIA", "Fotografía"), ("CERTIFICADO_ANTERIOR", "Certificado del grado anterior"), ("DOC_ENCARGADO", "Documento del encargado")), 1):
+            tipo, _ = TipoDocumentoAlumno.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "obligatorio": True, "visible_portal": True, "orden": orden})
+            RequisitoDocumentoAlumno.objects.get_or_create(institucion=institucion, tipo_documento=tipo, defaults={"obligatorio": True})
+        partida = TipoDocumentoAlumno.objects.get(institucion=institucion, codigo="PARTIDA")
+        for index, alumno in enumerate(alumnos[:3]):
+            DocumentoAlumno.objects.get_or_create(institucion=institucion, alumno=alumno, tipo_documento=partida, defaults={"estado": "RECHAZADO" if index == 2 else "APROBADO", "motivo_rechazo": "Archivo ilegible." if index == 2 else "", "cargado_por": admin, "revisado_por": admin, "fecha_revision": timezone.now()})
 
         self.stdout.write(self.style.SUCCESS("Datos demo de AulaPro creados/actualizados correctamente."))
         self.stdout.write("")

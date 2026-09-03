@@ -18,7 +18,7 @@ def acceso(r):
 def dashboard(r):
  acceso(r)
  if rol(r) not in ADMIN|{"SECRETARIA","CONTABILIDAD"}:return redirect("rrhh:mi_perfil")
- return render(r,"rrhh/dashboard.html",{"activos":Empleado.objects.filter(institucion=r.institucion,estado="ACTIVO").count(),"contratos":contratos_por_vencer(r.institucion).count(),"documentos":sum(resumen_expediente(e)["pendientes"] for e in Empleado.objects.filter(institucion=r.institucion,estado="ACTIVO")),"permisos":PermisoLaboral.objects.filter(institucion=r.institucion,estado="PENDIENTE").count()})
+ return render(r,"rrhh/dashboard.html",{"activos":Empleado.objects.filter(institucion=r.institucion,estado=Empleado.Estado.ACTIVO).count(),"contratos":contratos_por_vencer(r.institucion).count(),"documentos":sum(resumen_expediente(e)["pendientes"] for e in Empleado.objects.filter(institucion=r.institucion,estado=Empleado.Estado.ACTIVO)),"permisos":PermisoLaboral.objects.filter(institucion=r.institucion,estado=PermisoLaboral.Estado.PENDIENTE).count()})
 @institucion_required
 def empleados(r):
  acceso(r);q=empleados_visibles(r)
@@ -51,7 +51,7 @@ def contrato_crear(r,pk):
 def contrato_finalizar(r,pk):
  acceso(r);c=get_object_or_404(ContratoLaboral,institucion=r.institucion,pk=pk)
  if not puede_gestionar(r):raise PermissionDenied
- c.estado="FINALIZADO";c.fecha_fin=r.POST.get("fecha") or timezone.localdate();c.motivo_finalizacion=r.POST.get("motivo","");c.save();registrar_evento(r,"FINALIZAR_CONTRATO",c);return redirect("rrhh:empleado",pk=c.empleado_id)
+ c.estado=ContratoLaboral.Estado.FINALIZADO;c.fecha_fin=r.POST.get("fecha") or timezone.localdate();c.motivo_finalizacion=r.POST.get("motivo","");c.save();registrar_evento(r,"FINALIZAR_CONTRATO",c);return redirect("rrhh:empleado",pk=c.empleado_id)
 @institucion_required
 @require_POST
 def permiso_crear(r,pk):

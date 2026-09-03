@@ -7,7 +7,7 @@ from django.test import RequestFactory,TestCase
 from django.urls import reverse
 from instituciones.models import Institucion,UsuarioInstitucion
 from docentes.models import Docente
-from .forms import ContratoForm
+from .forms import ContratoForm, EmpleadoForm
 from .models import *
 from .services import *
 class Base(TestCase):
@@ -53,3 +53,34 @@ class PermisosVistaTests(Base):
   p=PermisoLaboral.objects.create(institucion=self.a,empleado=self.emp,tipo="VACACIONES",fecha_inicio=date.today(),fecha_fin=date.today(),motivo="Descanso",solicitado_por=self.users["DOCENTE"]);resolver_permiso(self.req("DIRECTOR"),p,"APROBADO");self.assertEqual(p.estado,"APROBADO");self.assertEqual(self.users["DOCENTE"].notificaciones.filter(tipo_origen="PERMISO_LABORAL").count(),1)
  def test_resolver_solo_post(self):
   p=PermisoLaboral.objects.create(institucion=self.a,empleado=self.emp,tipo="PERSONAL",fecha_inicio=date.today(),fecha_fin=date.today(),motivo="x",solicitado_por=self.users["DIRECTOR"]);self.client.force_login(self.users["DIRECTOR"]);self.assertEqual(self.client.get(reverse("rrhh:permiso_resolver",args=[p.pk])).status_code,405)
+
+
+class EmpleadoFormHotfixTests(Base):
+ def test_nuevo_empleado_carga_sin_field_error(self):
+  self.client.force_login(self.users["DIRECTOR"])
+  response=self.client.get(reverse("rrhh:empleado_nuevo"))
+  self.assertEqual(response.status_code,200)
+
+ def test_solo_muestra_docentes_activos_del_tenant(self):
+  activo=self.doc
+  inactivo=Docente.objects.create(institucion=self.a,primer_nombre="Inactivo",primer_apellido="Local",telefono="1",fecha_ingreso=date.today(),estado=Docente.Estado.INACTIVO)
+  externo=Docente.objects.create(institucion=self.b,primer_nombre="Activo",primer_apellido="Externo",telefono="1",fecha_ingreso=date.today(),estado=Docente.Estado.ACTIVO)
+  form=EmpleadoForm(institucion=self.a)
+  self.assertQuerySetEqual(form.fields["docente"].queryset,[activo])
+  self.assertNotIn(inactivo,form.fields["docente"].queryset)
+  self.assertNotIn(externo,form.fields["docente"].queryset)
+
+ def test_edicion_conserva_docente_y_usuario_inactivos(self):
+  self.doc.estado=Docente.Estado.SUSPENDIDO
+  self.doc.save()
+  asignacion=UsuarioInstitucion.objects.get(usuario=self.users["DOCENTE"],institucion=self.a)
+  asignacion.activo=False
+  asignacion.save()
+  form=EmpleadoForm(instance=self.emp,institucion=self.a)
+  self.assertIn(self.doc,form.fields["docente"].queryset)
+  self.assertIn(self.users["DOCENTE"],form.fields["usuario"].queryset)
+
+ def test_formulario_usa_estilos_aulapro(self):
+  form=EmpleadoForm(institucion=self.a)
+  self.assertIn("form-select",form.fields["docente"].widget.attrs["class"])
+  self.assertFalse(form.fields["docente"].required)

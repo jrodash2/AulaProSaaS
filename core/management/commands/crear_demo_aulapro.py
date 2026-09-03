@@ -115,6 +115,8 @@ class Command(BaseCommand):
             )
             usuarios[rol] = usuario
 
+        secretaria = usuarios[UsuarioInstitucion.Rol.SECRETARIA]
+
         superadmin, _ = User.objects.get_or_create(
             username="demo_superadmin",
             defaults={
@@ -325,6 +327,29 @@ class Command(BaseCommand):
             )
             alumnos.append(alumno)
             inscripciones.append(inscripcion)
+
+        for username, first_name, rol in (
+            ("demo_padre", "Encargado", UsuarioInstitucion.Rol.PADRE),
+            ("demo_alumno", "Alumno", UsuarioInstitucion.Rol.ALUMNO),
+        ):
+            usuario_portal, _ = User.objects.get_or_create(username=username)
+            usuario_portal.first_name = first_name
+            usuario_portal.last_name = "Demo"
+            usuario_portal.email = f"{username}@aulapro.local"
+            usuario_portal.activo = True
+            usuario_portal.set_password(password)
+            usuario_portal.save()
+            UsuarioInstitucion.objects.update_or_create(
+                usuario=usuario_portal,
+                institucion=institucion,
+                defaults={"rol": rol, "activo": True},
+            )
+            if rol == UsuarioInstitucion.Rol.PADRE:
+                encargado.usuario = usuario_portal
+                encargado.save(update_fields=("usuario", "fecha_actualizacion"))
+            else:
+                alumnos[0].usuario = usuario_portal
+                alumnos[0].save(update_fields=("usuario", "fecha_actualizacion"))
 
         docente_usuario = usuarios[UsuarioInstitucion.Rol.DOCENTE]
         docente, _ = Docente.objects.update_or_create(

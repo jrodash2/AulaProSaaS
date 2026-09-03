@@ -51,3 +51,20 @@ class PermisosTests(SeguimientoBase):
   r=self.reg(confidencialidad="PADRES");req=self.request(self.users["DIRECTOR"]);notificar_encargados(req,r);notificar_encargados(req,r);self.assertEqual(self.padre.notificaciones.filter(tipo_origen="SEGUIMIENTO",origen_id=str(r.pk)).count(),1)
  def test_accion_cerrar_solo_post(self):
   r=self.reg();self.client.force_login(self.users["DIRECTOR"]);self.assertEqual(self.client.get(reverse("seguimiento:cerrar",args=[r.pk])).status_code,405)
+
+class FormularioSeguimientoQATests(SeguimientoBase):
+ def test_nuevo_seguimiento_no_usa_campo_docente_inexistente(self):
+  self.client.force_login(self.users["DIRECTOR"])
+  response=self.client.get(reverse("seguimiento:nuevo"))
+  self.assertEqual(response.status_code,200)
+
+ def test_docentes_del_selector_son_activos_y_del_tenant(self):
+  from seguimiento.forms import RegistroForm
+  from docentes.models import Docente
+  docente_activo=Docente.objects.get(institucion=self.a,usuario=self.users["DOCENTE"])
+  docente_inactivo=Docente.objects.create(institucion=self.a,primer_nombre="Inactivo",primer_apellido="Local",telefono="1",fecha_ingreso=date.today(),estado=Docente.Estado.INACTIVO)
+  externo=Docente.objects.create(institucion=self.b,primer_nombre="Activo",primer_apellido="Externo",telefono="1",fecha_ingreso=date.today(),estado=Docente.Estado.ACTIVO)
+  form=RegistroForm(institucion=self.a,alumnos=Alumno.objects.filter(pk=self.al.pk))
+  self.assertIn(docente_activo,form.fields["docente"].queryset)
+  self.assertNotIn(docente_inactivo,form.fields["docente"].queryset)
+  self.assertNotIn(externo,form.fields["docente"].queryset)

@@ -134,3 +134,21 @@ def exportar_admisiones(request):
  for s in q:
   e=s.aspirante.encargados.order_by("-es_principal").first();rows.append((s.numero_solicitud,s.aspirante.nombre_completo,s.aspirante.cui or "",s.ciclo_solicitado.nombre,s.oferta_solicitada.nombre_mostrado,s.grado_solicitado.nombre,s.get_estado_display(),s.fecha_solicitud,s.get_origen_display(),f"{e.nombres} {e.apellidos}" if e else "",e.telefono if e else "",e.correo if e else ""))
  return excel_response(institucion=request.institucion,titulo="Admisiones",encabezados=("Número","Aspirante","CUI","Ciclo","Oferta","Grado","Estado","Fecha","Origen","Encargado","Teléfono","Correo"),filas=rows,nombre="admisiones_aulapro.xlsx",filtros=request.GET.urlencode())
+
+@reporte_required("docentes")
+def rrhh(request):
+ from django.core.exceptions import PermissionDenied
+ from rrhh.models import Empleado,ContratoLaboral,PermisoLaboral
+ from rrhh.services import contratos_por_vencer
+ from suscripciones.services import modulo_habilitado
+ if not modulo_habilitado(request.institucion,"RRHH"):raise PermissionDenied
+ q=Empleado.objects.filter(institucion=request.institucion).select_related("puesto","area")
+ for k in ("estado","area","puesto"):
+  if request.GET.get(k):q=q.filter(**{f"{k}_id" if k in ("area","puesto") else k:request.GET[k]})
+ return render(request,"reportes/rrhh.html",{"items":_page(request,q),"activos":q.filter(estado="ACTIVO").count(),"por_vencer":contratos_por_vencer(request.institucion).count(),"vencidos":ContratoLaboral.objects.filter(institucion=request.institucion,estado="VENCIDO").count(),"permisos":PermisoLaboral.objects.filter(institucion=request.institucion,estado="PENDIENTE").count()})
+@reporte_required("docentes")
+def exportar_rrhh(request):
+ from rrhh.models import Empleado
+ q=Empleado.objects.filter(institucion=request.institucion).select_related("puesto","area").prefetch_related("contratos")
+ rows=[(e.codigo_empleado,e.nombre_completo,e.puesto.nombre,e.area.nombre,e.fecha_ingreso,e.get_estado_display(),next((c.numero_contrato for c in e.contratos.all() if c.estado=="VIGENTE"),"")) for e in q]
+ return excel_response(institucion=request.institucion,titulo="Recursos Humanos",encabezados=("Código","Nombre","Puesto","Área","Fecha ingreso","Estado","Contrato"),filas=rows,nombre="rrhh_aulapro.xlsx",filtros=request.GET.urlencode())

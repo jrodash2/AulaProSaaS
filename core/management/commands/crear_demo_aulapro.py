@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, time, timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -563,6 +563,30 @@ class Command(BaseCommand):
             aspirante, _ = Aspirante.objects.update_or_create(institucion=institucion, nombres=f"Aspirante {indice}", apellidos="Demo", fecha_nacimiento=date(2017, 1, min(indice, 28)), defaults={"sexo": "F" if indice % 2 else "M", "correo": f"familia{(indice + 1) // 2}@demo.test", "estado": "INSCRITO" if estado_admision == "INSCRITA" else "EN_PROCESO", "creado_por": secretaria})
             EncargadoAspirante.objects.update_or_create(institucion=institucion, aspirante=aspirante, es_principal=True, defaults={"nombres": f"Encargado {(indice + 1) // 2}", "apellidos": "Demo", "parentesco": "PADRE", "telefono": "55550000", "correo": f"familia{(indice + 1) // 2}@demo.test"})
             SolicitudAdmision.objects.update_or_create(institucion=institucion, aspirante=aspirante, ciclo_solicitado=ciclo, defaults={"oferta_solicitada": oferta, "grado_solicitado": grado, "jornada_solicitada": jornada, "estado": estado_admision, "origen": ("REFERIDO", "REDES_SOCIALES", "PAGINA_WEB", "PUBLICIDAD", "VISITA")[indice % 5], "creada_por": secretaria})
+
+        from rrhh.models import AreaLaboral, ContratoLaboral, DocumentoEmpleado, Empleado, PermisoLaboral, PuestoLaboral, TipoDocumentoEmpleado
+        areas_rrhh = {}
+        for orden, codigo, nombre in ((1, "DIRECCION", "Dirección"), (2, "ADMIN", "Administración"), (3, "DOCENCIA", "Docencia"), (4, "CONTABILIDAD", "Contabilidad")):
+            areas_rrhh[codigo], _ = AreaLaboral.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "orden": orden, "activa": True})
+        puestos_rrhh = {}
+        for codigo, nombre, area_codigo, tipo in (("DIRECTOR", "Director", "DIRECCION", "DIRECTIVO"), ("SECRETARIA", "Secretaria", "ADMIN", "ADMINISTRATIVO"), ("CONTADOR", "Contador", "CONTABILIDAD", "ADMINISTRATIVO"), ("PROFESOR", "Profesor de Matemática", "DOCENCIA", "DOCENTE"), ("ASISTENTE", "Asistente administrativo", "ADMIN", "ADMINISTRATIVO")):
+            puestos_rrhh[codigo], _ = PuestoLaboral.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "area": areas_rrhh[area_codigo], "tipo": tipo, "activo": True})
+        perfiles_rrhh = (("DIRECTOR", UsuarioInstitucion.Rol.DIRECTOR, "Director", "Demo", None), ("SECRETARIA", UsuarioInstitucion.Rol.SECRETARIA, "Secretaria", "Demo", None), ("CONTADOR", UsuarioInstitucion.Rol.CONTABILIDAD, "Contabilidad", "Demo", None), ("PROFESOR", UsuarioInstitucion.Rol.DOCENTE, "Docente", "Demo", docente), ("ASISTENTE", None, "Andrea", "Administrativa", None))
+        empleados_rrhh = []
+        for indice, (puesto_codigo, rol_usuario, nombres, apellidos, docente_vinculado) in enumerate(perfiles_rrhh, 1):
+            puesto = puestos_rrhh[puesto_codigo]; usuario_vinculado = usuarios.get(rol_usuario) if rol_usuario else None
+            empleado, _ = Empleado.objects.update_or_create(institucion=institucion, nombres=nombres, apellidos=apellidos, defaults={"puesto": puesto, "area": puesto.area, "fecha_ingreso": date(2024, 1, 15), "estado": "ACTIVO", "usuario": usuario_vinculado, "docente": docente_vinculado, "creado_por": admin})
+            empleados_rrhh.append(empleado)
+        hoy_rrhh = timezone.localdate()
+        for indice, empleado in enumerate(empleados_rrhh):
+            estado_contrato = "FINALIZADO" if indice == 4 else "VIGENTE"
+            fin = hoy_rrhh - timedelta(days=120) if indice == 4 else hoy_rrhh + timedelta(days=20 if indice == 3 else 180)
+            ContratoLaboral.objects.update_or_create(institucion=institucion, numero_contrato=f"DEMO-RRHH-{indice + 1:03d}", defaults={"empleado": empleado, "tipo_contrato": "PLAZO_FIJO", "fecha_inicio": date(2025, 1, 1), "fecha_fin": fin, "puesto": empleado.puesto, "estado": estado_contrato, "creado_por": admin})
+        tipo_dpi, _ = TipoDocumentoEmpleado.objects.update_or_create(institucion=institucion, codigo="DPI", defaults={"nombre": "Documento personal de identificación", "obligatorio": True, "activo": True})
+        for empleado in empleados_rrhh:
+            DocumentoEmpleado.objects.get_or_create(institucion=institucion, empleado=empleado, tipo_documento=tipo_dpi, defaults={"estado": "ENTREGADO", "observaciones": "Metadato demo sin archivo binario.", "cargado_por": admin})
+        for indice, estado_permiso in enumerate(("PENDIENTE", "APROBADO", "RECHAZADO")):
+            PermisoLaboral.objects.update_or_create(institucion=institucion, empleado=empleados_rrhh[indice], tipo=("PERSONAL", "VACACIONES", "ESTUDIO")[indice], fecha_inicio=hoy_rrhh + timedelta(days=indice + 2), defaults={"fecha_fin": hoy_rrhh + timedelta(days=indice + 2), "motivo": "Solicitud administrativa demo.", "estado": estado_permiso, "solicitado_por": empleados_rrhh[indice].usuario or admin, "autorizado_por": admin if estado_permiso != "PENDIENTE" else None, "fecha_resolucion": timezone.now() if estado_permiso != "PENDIENTE" else None})
 
         self.stdout.write(self.style.SUCCESS("Datos demo de AulaPro creados/actualizados correctamente."))
         self.stdout.write("")

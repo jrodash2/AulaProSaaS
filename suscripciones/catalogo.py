@@ -13,6 +13,7 @@ MODULOS_OFICIALES = (
     ("HORARIOS", "Horarios académicos", 12, "Planificación semanal de clases, docentes, secciones y aulas.", "bi-calendar-week"),
     ("SEGUIMIENTO", "Seguimiento estudiantil", 13, "Incidencias, reconocimientos, compromisos y seguimiento del alumno.", "bi-heart-pulse"),
     ("ADMISIONES", "Admisiones", 14, "Gestión de aspirantes, solicitudes, entrevistas y procesos de ingreso.", "bi-person-plus"),
+    ("RRHH", "Recursos Humanos", 15, "Gestión de empleados, contratos, documentos y permisos del personal.", "bi-briefcase"),
 )
 
 MODULOS_POR_PLAN = {

@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "horarios",
     "seguimiento",
     "admisiones",
+    "rrhh",
 ]
 
 MIDDLEWARE = [

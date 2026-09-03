@@ -528,6 +528,30 @@ class Command(BaseCommand):
                 defaults={"ciclo": ciclo, "jornada": jornada, "asignacion_docente": asignacion, "aula": aula_demo, "activo": True},
             )
 
+        from seguimiento.models import CategoriaSeguimiento, CompromisoSeguimiento, RegistroSeguimiento, ReunionSeguimiento
+        categorias = {}
+        for orden, codigo, nombre, tipo in (
+            (1, "PUNTUALIDAD", "Puntualidad", "INCIDENCIA"), (2, "RESPONSABILIDAD", "Responsabilidad", "POSITIVO"),
+            (3, "CONVIVENCIA", "Convivencia", "CONVIVENCIA"), (4, "RENDIMIENTO", "Rendimiento académico", "ACADEMICO"),
+            (5, "PARTICIPACION", "Participación", "POSITIVO"), (6, "LIDERAZGO", "Liderazgo", "POSITIVO"),
+        ):
+            categorias[codigo], _ = CategoriaSeguimiento.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "tipo": tipo, "orden": orden, "activo": True})
+        datos = (
+            (alumnos[0], inscripciones[0], "PARTICIPACION", "POSITIVO", "Excelente participación", "PUBLICABLE_PORTAL", "ABIERTO", "NO_APLICA"),
+            (alumnos[1], inscripciones[1], "LIDERAZGO", "POSITIVO", "Liderazgo solidario", "PADRES", "RESUELTO", "NO_APLICA"),
+            (alumnos[0], inscripciones[0], "PUNTUALIDAD", "INCIDENCIA", "Llegadas tarde recurrentes", "PADRES", "EN_SEGUIMIENTO", "MEDIA"),
+            (alumnos[2], inscripciones[2], "CONVIVENCIA", "CONVIVENCIA", "Acuerdo de convivencia", "DOCENTES", "ABIERTO", "BAJA"),
+        )
+        registros = []
+        for alumno, inscripcion, codigo, tipo, titulo, privacidad, estado, gravedad in datos:
+            registro, _ = RegistroSeguimiento.objects.update_or_create(
+                institucion=institucion, alumno=alumno, ciclo=ciclo, titulo=titulo,
+                defaults={"inscripcion": inscripcion, "categoria": categorias[codigo], "tipo": tipo, "fecha": date(2026, 8, 28), "descripcion": "Registro demostrativo de acompañamiento estudiantil.", "gravedad": gravedad, "confidencialidad": privacidad, "docente": docente, "registrado_por": admin, "estado": estado},
+            ); registros.append(registro)
+        for registro, descripcion, responsable in ((registros[2], "Mejorar puntualidad durante el mes.", "ALUMNO"), (registros[3], "Dar seguimiento conjunto en casa.", "PADRE")):
+            CompromisoSeguimiento.objects.get_or_create(institucion=institucion, registro=registro, descripcion=descripcion, defaults={"responsable": responsable, "fecha_compromiso": date(2026, 8, 29), "fecha_limite": date(2026, 9, 15), "creado_por": admin})
+        ReunionSeguimiento.objects.get_or_create(institucion=institucion, alumno=alumnos[0], registro=registros[2], motivo="Seguimiento de puntualidad", defaults={"fecha": timezone.now(), "encargado": encargado, "participantes": "Dirección, encargado y estudiante", "acuerdos": "Revisar avances en dos semanas.", "creado_por": admin})
+
         self.stdout.write(self.style.SUCCESS("Datos demo de AulaPro creados/actualizados correctamente."))
         self.stdout.write("")
         self.stdout.write("Institución: Colegio Demo AulaPro")

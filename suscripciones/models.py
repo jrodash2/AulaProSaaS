@@ -21,6 +21,7 @@ class ModuloSaaS(models.Model):
         REPORTES = "REPORTES", "Reportes"
         EXPEDIENTE = "EXPEDIENTE", "Expediente digital"
         HORARIOS = "HORARIOS", "Horarios académicos"
+        SEGUIMIENTO = "SEGUIMIENTO", "Seguimiento estudiantil"
 
     codigo = models.CharField(max_length=24, choices=Codigo.choices, unique=True)
     nombre = models.CharField(max_length=80)

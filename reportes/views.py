@@ -98,3 +98,20 @@ def horarios(request):
   carga=validar_carga_semanal(seccion);filas.append({"seccion":seccion,"carga":carga,"completa":bool(carga) and all(not x["faltan"] and not x["exceso"] for x in carga)})
  ctx["filas"]=filas;ctx["completas"]=sum(f["completa"] for f in filas);ctx["incompletas"]=len(filas)-ctx["completas"]
  return render(request,"reportes/horarios.html",ctx)
+
+@reporte_required("academico")
+def seguimiento(request):
+ from django.core.exceptions import PermissionDenied
+ from seguimiento.models import RegistroSeguimiento,CompromisoSeguimiento
+ from suscripciones.services import modulo_habilitado
+ if not modulo_habilitado(request.institucion,"SEGUIMIENTO"):raise PermissionDenied
+ ciclo,ctx=_base(request);q=RegistroSeguimiento.objects.filter(institucion=request.institucion,ciclo=ciclo).select_related("alumno","inscripcion__grado","inscripcion__seccion","categoria")
+ for k in ("categoria","tipo","estado"):
+  if request.GET.get(k):q=q.filter(**{f"{k}_id" if k=="categoria" else k:request.GET[k]})
+ ctx.update({"items":_page(request,q),"registros":q.count(),"abiertos":q.filter(estado__in=("ABIERTO","EN_SEGUIMIENTO")).count(),"resueltos":q.filter(estado__in=("RESUELTO","CERRADO")).count(),"reconocimientos":q.filter(tipo="POSITIVO").count(),"compromisos":CompromisoSeguimiento.objects.filter(registro__in=q,estado="PENDIENTE").count()});return render(request,"reportes/seguimiento.html",ctx)
+@reporte_required("academico")
+def exportar_seguimiento(request):
+ from seguimiento.models import RegistroSeguimiento
+ q=RegistroSeguimiento.objects.filter(institucion=request.institucion).select_related("alumno","inscripcion__grado","inscripcion__seccion","categoria")
+ rows=[(r.alumno.nombre_completo,r.inscripcion.grado.nombre,r.inscripcion.seccion.nombre,r.fecha,r.get_tipo_display(),r.categoria.nombre,r.get_estado_display(),r.get_gravedad_display()) for r in q]
+ return excel_response(institucion=request.institucion,titulo="Seguimiento estudiantil",encabezados=("Alumno","Grado","Sección","Fecha","Tipo","Categoría","Estado","Gravedad"),filas=rows,nombre="seguimiento_aulapro.xlsx",filtros=request.GET.urlencode())

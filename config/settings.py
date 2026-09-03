@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "suscripciones",
     "horarios",
     "seguimiento",
+    "admisiones",
 ]
 
 MIDDLEWARE = [

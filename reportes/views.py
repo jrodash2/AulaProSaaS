@@ -115,3 +115,22 @@ def exportar_seguimiento(request):
  q=RegistroSeguimiento.objects.filter(institucion=request.institucion).select_related("alumno","inscripcion__grado","inscripcion__seccion","categoria")
  rows=[(r.alumno.nombre_completo,r.inscripcion.grado.nombre,r.inscripcion.seccion.nombre,r.fecha,r.get_tipo_display(),r.categoria.nombre,r.get_estado_display(),r.get_gravedad_display()) for r in q]
  return excel_response(institucion=request.institucion,titulo="Seguimiento estudiantil",encabezados=("Alumno","Grado","Sección","Fecha","Tipo","Categoría","Estado","Gravedad"),filas=rows,nombre="seguimiento_aulapro.xlsx",filtros=request.GET.urlencode())
+
+@reporte_required("academico")
+def admisiones(request):
+ from admisiones.models import SolicitudAdmision
+ from suscripciones.services import modulo_habilitado
+ from django.core.exceptions import PermissionDenied
+ if not modulo_habilitado(request.institucion,"ADMISIONES"):raise PermissionDenied
+ q=SolicitudAdmision.objects.filter(institucion=request.institucion).select_related("aspirante","ciclo_solicitado","grado_solicitado")
+ for k in ("estado","origen"):
+  if request.GET.get(k):q=q.filter(**{k:request.GET[k]})
+ total=q.exclude(estado="CANCELADA").count();ins=q.filter(estado="INSCRITA").count();return render(request,"reportes/admisiones.html",{"items":_page(request,q),"total":total,"proceso":q.exclude(estado__in=("APROBADA","INSCRITA","RECHAZADA","CANCELADA")).count(),"aprobadas":q.filter(estado="APROBADA").count(),"inscritas":ins,"espera":q.filter(estado="LISTA_ESPERA").count(),"rechazadas":q.filter(estado="RECHAZADA").count(),"conversion":round(ins*100/total,1) if total else 0})
+@reporte_required("academico")
+def exportar_admisiones(request):
+ from admisiones.models import SolicitudAdmision
+ q=SolicitudAdmision.objects.filter(institucion=request.institucion).select_related("aspirante","ciclo_solicitado","oferta_solicitada","grado_solicitado").prefetch_related("aspirante__encargados")
+ rows=[]
+ for s in q:
+  e=s.aspirante.encargados.order_by("-es_principal").first();rows.append((s.numero_solicitud,s.aspirante.nombre_completo,s.aspirante.cui or "",s.ciclo_solicitado.nombre,s.oferta_solicitada.nombre_mostrado,s.grado_solicitado.nombre,s.get_estado_display(),s.fecha_solicitud,s.get_origen_display(),f"{e.nombres} {e.apellidos}" if e else "",e.telefono if e else "",e.correo if e else ""))
+ return excel_response(institucion=request.institucion,titulo="Admisiones",encabezados=("Número","Aspirante","CUI","Ciclo","Oferta","Grado","Estado","Fecha","Origen","Encargado","Teléfono","Correo"),filas=rows,nombre="admisiones_aulapro.xlsx",filtros=request.GET.urlencode())

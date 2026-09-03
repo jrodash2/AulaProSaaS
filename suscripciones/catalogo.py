@@ -12,6 +12,7 @@ MODULOS_OFICIALES = (
     ("EXPEDIENTE", "Expediente digital", 11, "Gestión de documentos y requisitos de estudiantes.", "bi-folder2-open"),
     ("HORARIOS", "Horarios académicos", 12, "Planificación semanal de clases, docentes, secciones y aulas.", "bi-calendar-week"),
     ("SEGUIMIENTO", "Seguimiento estudiantil", 13, "Incidencias, reconocimientos, compromisos y seguimiento del alumno.", "bi-heart-pulse"),
+    ("ADMISIONES", "Admisiones", 14, "Gestión de aspirantes, solicitudes, entrevistas y procesos de ingreso.", "bi-person-plus"),
 )
 
 MODULOS_POR_PLAN = {

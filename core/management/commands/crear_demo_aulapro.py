@@ -552,6 +552,18 @@ class Command(BaseCommand):
             CompromisoSeguimiento.objects.get_or_create(institucion=institucion, registro=registro, descripcion=descripcion, defaults={"responsable": responsable, "fecha_compromiso": date(2026, 8, 29), "fecha_limite": date(2026, 9, 15), "creado_por": admin})
         ReunionSeguimiento.objects.get_or_create(institucion=institucion, alumno=alumnos[0], registro=registros[2], motivo="Seguimiento de puntualidad", defaults={"fecha": timezone.now(), "encargado": encargado, "participantes": "Dirección, encargado y estudiante", "acuerdos": "Revisar avances en dos semanas.", "creado_por": admin})
 
+        from admisiones.models import Aspirante, ConfiguracionAdmision, EncargadoAspirante, SolicitudAdmision, TipoDocumentoAdmision, TipoEvaluacionAdmision
+        ConfiguracionAdmision.objects.update_or_create(institucion=institucion, defaults={"admisiones_abiertas": True, "titulo_publico": "Proceso de admisión 2026", "mensaje_publico": "Gracias por considerar Colegio Demo AulaPro.", "ciclo_predeterminado": ciclo, "permitir_carga_documentos": True})
+        for codigo, nombre in (("PARTIDA", "Partida de nacimiento"), ("CERTIFICADO", "Certificado del grado anterior"), ("FOTOGRAFIA", "Fotografía"), ("ENCARGADO", "Documento del encargado")):
+            TipoDocumentoAdmision.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "obligatorio": True, "activo": True})
+        for nombre in ("Matemática", "Lectura", "Entrevista familiar", "Madurez escolar"):
+            TipoEvaluacionAdmision.objects.update_or_create(institucion=institucion, nombre=nombre, defaults={"punteo_maximo": 100, "punteo_minimo_referencia": 60, "activo": True})
+        estados_admision = ("NUEVA", "NUEVA", "DOCUMENTACION_PENDIENTE", "DOCUMENTACION_PENDIENTE", "EVALUACION_PENDIENTE", "EVALUACION_PENDIENTE", "APROBADA", "APROBADA", "LISTA_ESPERA", "INSCRITA")
+        for indice, estado_admision in enumerate(estados_admision, 1):
+            aspirante, _ = Aspirante.objects.update_or_create(institucion=institucion, nombres=f"Aspirante {indice}", apellidos="Demo", fecha_nacimiento=date(2017, 1, min(indice, 28)), defaults={"sexo": "F" if indice % 2 else "M", "correo": f"familia{(indice + 1) // 2}@demo.test", "estado": "INSCRITO" if estado_admision == "INSCRITA" else "EN_PROCESO", "creado_por": secretaria})
+            EncargadoAspirante.objects.update_or_create(institucion=institucion, aspirante=aspirante, es_principal=True, defaults={"nombres": f"Encargado {(indice + 1) // 2}", "apellidos": "Demo", "parentesco": "PADRE", "telefono": "55550000", "correo": f"familia{(indice + 1) // 2}@demo.test"})
+            SolicitudAdmision.objects.update_or_create(institucion=institucion, aspirante=aspirante, ciclo_solicitado=ciclo, defaults={"oferta_solicitada": oferta, "grado_solicitado": grado, "jornada_solicitada": jornada, "estado": estado_admision, "origen": ("REFERIDO", "REDES_SOCIALES", "PAGINA_WEB", "PUBLICIDAD", "VISITA")[indice % 5], "creada_por": secretaria})
+
         self.stdout.write(self.style.SUCCESS("Datos demo de AulaPro creados/actualizados correctamente."))
         self.stdout.write("")
         self.stdout.write("Institución: Colegio Demo AulaPro")

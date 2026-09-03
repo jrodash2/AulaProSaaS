@@ -59,6 +59,7 @@ class ActividadEvaluacion(models.Model):
         ordering=("periodo__numero_orden","fecha","nombre");indexes=[models.Index(fields=("institucion","periodo"),name="actividad_inst_periodo_idx"),models.Index(fields=("seccion","periodo"),name="actividad_secc_periodo_idx"),models.Index(fields=("curso","periodo"),name="actividad_curso_periodo_idx")]
     def clean(self):
         e={};a=self.asignacion_docente if self.asignacion_docente_id else None
+        if self._state.adding and self.ciclo_id and self.ciclo.cerrado:e["ciclo"]="El ciclo está cerrado y no admite nuevas actividades."
         for f in ("ciclo","periodo","curso","grado","seccion","tipo_evaluacion","asignacion_docente"):
             o=getattr(self,f,None)
             if o and o.institucion_id!=self.institucion_id:e[f]="Debe pertenecer a la institución."
@@ -83,6 +84,7 @@ class Calificacion(models.Model):
         constraints=[models.UniqueConstraint(fields=("actividad","alumno"),name="calificacion_unica_actividad_alumno")];indexes=[models.Index(fields=("actividad","alumno"),name="calif_actividad_alumno_idx")]
     def clean(self):
         e={}
+        if self._state.adding and self.actividad_id and self.actividad.ciclo.cerrado:e["actividad"]="El ciclo está cerrado y no admite nuevas calificaciones."
         if self.actividad_id and self.actividad.institucion_id!=self.institucion_id:e["actividad"]="La actividad no pertenece a la institución."
         if self.alumno_id and self.alumno.institucion_id!=self.institucion_id:e["alumno"]="El alumno no pertenece a la institución."
         if self.inscripcion_id:

@@ -41,6 +41,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--password", default=DEFAULT_PASSWORD)
+        parser.add_argument("--allow-production-demo", action="store_true", help="Alias compatible para permitir datos demo en producción.")
         parser.add_argument(
             "--permitir-produccion",
             action="store_true",
@@ -49,13 +50,20 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        if not settings.DEBUG and not options["permitir_produccion"]:
+        if not settings.DEBUG and not (options["permitir_produccion"] or options["allow_production_demo"]):
             raise CommandError(
                 "Por seguridad, este comando solo se ejecuta con DEBUG=True. "
                 "Use --permitir-produccion únicamente en un entorno demo controlado."
             )
 
         password = options["password"]
+        # Mantiene compatibilidad con el comando demo histórico del módulo tareas.
+        # Django resuelve nombres de comandos duplicados según INSTALLED_APPS.
+        if options["allow_production_demo"]:
+            from tareas.management.commands.crear_demo_aulapro import Command as TareasDemoCommand
+            comando = TareasDemoCommand(); comando.stdout = self.stdout; comando.stderr = self.stderr
+            comando.handle(allow_production_demo=True)
+            return
         User = get_user_model()
 
         institucion, _ = Institucion.objects.update_or_create(
@@ -474,6 +482,75 @@ class Command(BaseCommand):
                     "registrado_por": docente_usuario,
                 },
             )
+
+        from alumnos.models import DocumentoAlumno, RequisitoDocumentoAlumno, TipoDocumentoAlumno
+        for orden, (codigo, nombre) in enumerate((("PARTIDA", "Partida de nacimiento"), ("FOTOGRAFIA", "Fotografía"), ("CERTIFICADO_ANTERIOR", "Certificado del grado anterior"), ("DOC_ENCARGADO", "Documento del encargado")), 1):
+            tipo, _ = TipoDocumentoAlumno.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "obligatorio": True, "visible_portal": True, "orden": orden})
+            RequisitoDocumentoAlumno.objects.get_or_create(institucion=institucion, tipo_documento=tipo, defaults={"obligatorio": True})
+        partida = TipoDocumentoAlumno.objects.get(institucion=institucion, codigo="PARTIDA")
+        for index, alumno in enumerate(alumnos[:3]):
+            DocumentoAlumno.objects.get_or_create(institucion=institucion, alumno=alumno, tipo_documento=partida, defaults={"estado": "RECHAZADO" if index == 2 else "APROBADO", "motivo_rechazo": "Archivo ilegible." if index == 2 else "", "cargado_por": admin, "revisado_por": admin, "fecha_revision": timezone.now()})
+
+        # Horario demo idempotente. La asignación docente sigue siendo la fuente
+        # de verdad del curso y profesor; no se duplican esos datos en la clase.
+        from horarios.models import Aula, BloqueHorario, HorarioClase
+        aula_demo, _ = Aula.objects.update_or_create(
+            institucion=institucion,
+            codigo="AULA-1",
+            defaults={"nombre": "Aula 1", "capacidad": 35, "activa": True},
+        )
+        Aula.objects.update_or_create(
+            institucion=institucion,
+            codigo="LAB",
+            defaults={"nombre": "Laboratorio", "capacidad": 24, "activa": True},
+        )
+        bloques_demo = []
+        for orden, inicio, fin in ((10, time(7, 0), time(7, 45)), (20, time(7, 45), time(8, 30)), (30, time(8, 50), time(9, 35))):
+            bloque, _ = BloqueHorario.objects.update_or_create(
+                institucion=institucion,
+                jornada=jornada,
+                orden=orden,
+                defaults={"nombre": f"Período {orden // 10}", "hora_inicio": inicio, "hora_fin": fin, "tipo": "CLASE", "activo": True},
+            )
+            bloques_demo.append(bloque)
+        BloqueHorario.objects.update_or_create(
+            institucion=institucion,
+            jornada=jornada,
+            orden=25,
+            defaults={"nombre": "Recreo", "hora_inicio": time(8, 30), "hora_fin": time(8, 50), "tipo": "RECREO", "activo": True},
+        )
+        for dia, bloque in zip(("LUNES", "MIERCOLES", "VIERNES"), bloques_demo):
+            HorarioClase.objects.update_or_create(
+                institucion=institucion,
+                seccion=seccion,
+                dia_semana=dia,
+                bloque=bloque,
+                defaults={"ciclo": ciclo, "jornada": jornada, "asignacion_docente": asignacion, "aula": aula_demo, "activo": True},
+            )
+
+        from seguimiento.models import CategoriaSeguimiento, CompromisoSeguimiento, RegistroSeguimiento, ReunionSeguimiento
+        categorias = {}
+        for orden, codigo, nombre, tipo in (
+            (1, "PUNTUALIDAD", "Puntualidad", "INCIDENCIA"), (2, "RESPONSABILIDAD", "Responsabilidad", "POSITIVO"),
+            (3, "CONVIVENCIA", "Convivencia", "CONVIVENCIA"), (4, "RENDIMIENTO", "Rendimiento académico", "ACADEMICO"),
+            (5, "PARTICIPACION", "Participación", "POSITIVO"), (6, "LIDERAZGO", "Liderazgo", "POSITIVO"),
+        ):
+            categorias[codigo], _ = CategoriaSeguimiento.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "tipo": tipo, "orden": orden, "activo": True})
+        datos = (
+            (alumnos[0], inscripciones[0], "PARTICIPACION", "POSITIVO", "Excelente participación", "PUBLICABLE_PORTAL", "ABIERTO", "NO_APLICA"),
+            (alumnos[1], inscripciones[1], "LIDERAZGO", "POSITIVO", "Liderazgo solidario", "PADRES", "RESUELTO", "NO_APLICA"),
+            (alumnos[0], inscripciones[0], "PUNTUALIDAD", "INCIDENCIA", "Llegadas tarde recurrentes", "PADRES", "EN_SEGUIMIENTO", "MEDIA"),
+            (alumnos[2], inscripciones[2], "CONVIVENCIA", "CONVIVENCIA", "Acuerdo de convivencia", "DOCENTES", "ABIERTO", "BAJA"),
+        )
+        registros = []
+        for alumno, inscripcion, codigo, tipo, titulo, privacidad, estado, gravedad in datos:
+            registro, _ = RegistroSeguimiento.objects.update_or_create(
+                institucion=institucion, alumno=alumno, ciclo=ciclo, titulo=titulo,
+                defaults={"inscripcion": inscripcion, "categoria": categorias[codigo], "tipo": tipo, "fecha": date(2026, 8, 28), "descripcion": "Registro demostrativo de acompañamiento estudiantil.", "gravedad": gravedad, "confidencialidad": privacidad, "docente": docente, "registrado_por": admin, "estado": estado},
+            ); registros.append(registro)
+        for registro, descripcion, responsable in ((registros[2], "Mejorar puntualidad durante el mes.", "ALUMNO"), (registros[3], "Dar seguimiento conjunto en casa.", "PADRE")):
+            CompromisoSeguimiento.objects.get_or_create(institucion=institucion, registro=registro, descripcion=descripcion, defaults={"responsable": responsable, "fecha_compromiso": date(2026, 8, 29), "fecha_limite": date(2026, 9, 15), "creado_por": admin})
+        ReunionSeguimiento.objects.get_or_create(institucion=institucion, alumno=alumnos[0], registro=registros[2], motivo="Seguimiento de puntualidad", defaults={"fecha": timezone.now(), "encargado": encargado, "participantes": "Dirección, encargado y estudiante", "acuerdos": "Revisar avances en dos semanas.", "creado_por": admin})
 
         self.stdout.write(self.style.SUCCESS("Datos demo de AulaPro creados/actualizados correctamente."))
         self.stdout.write("")

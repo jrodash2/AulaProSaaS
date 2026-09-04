@@ -109,3 +109,69 @@ class DemoPilotoQATests(TestCase):
             for url in urls:
                 with self.subTest(username=username, url=url):
                     self.assertLess(self.client.get(url).status_code, 500)
+
+    def test_centro_demo_acceso_y_conteos_tenant_safe(self):
+        from django.urls import reverse
+        from core.demo.services import obtener_resumen_demo
+        from instituciones.models import UsuarioInstitucion
+
+        for username in ("demo_propietario", "demo_docente"):
+            self.client.logout()
+            self.assertTrue(self.client.login(username=username, password="AulaProDemo2026!"))
+            response = self.client.get(reverse("core:demo_guia"))
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.context["resumen_demo"]["alumnos"]["alumnos"], 30)
+
+        otra = Institucion.objects.create(nombre="Institución ajena", codigo="NO-DEMO")
+        otro = get_user_model().objects.create_user(username="usuario-real", password="segura-123")
+        asignacion = UsuarioInstitucion.objects.create(usuario=otro, institucion=otra, rol=UsuarioInstitucion.Rol.PROPIETARIO)
+        Alumno.objects.create(institucion=otra, cui="9999999999999", primer_nombre="DatoAjeno", primer_apellido="Privado", fecha_nacimiento="2012-01-01", sexo="F", fecha_ingreso="2026-01-01")
+        self.client.force_login(otro)
+        session = self.client.session
+        session["asignacion_institucion_id"] = asignacion.pk
+        session.save()
+        response = self.client.get(reverse("core:demo_guia"))
+        self.assertEqual(response.status_code, 404)
+        self.assertNotContains(response, "AulaProDemo2026!", status_code=404)
+        self.assertEqual(obtener_resumen_demo(self.institucion)["alumnos"]["alumnos"], 30)
+
+    def test_centro_demo_respeta_modulos_y_links_por_rol(self):
+        from django.urls import reverse
+        from suscripciones.models import PlanModulo
+
+        self.client.login(username="demo_propietario", password="AulaProDemo2026!")
+        response = self.client.get(reverse("core:demo_guia"))
+        self.assertContains(response, reverse("academico:landing"))
+        self.assertContains(response, reverse("rrhh:dashboard"))
+        PlanModulo.objects.filter(plan__suscripciones__institucion=self.institucion, modulo__codigo="RRHH").update(habilitado=False)
+        response = self.client.get(reverse("core:demo_guia"))
+        self.assertNotContains(response, 'data-module="RRHH"')
+        self.assertNotContains(response, reverse("rrhh:dashboard"))
+
+    def test_centro_demo_sin_contexto_no_asume_tenant(self):
+        from django.urls import reverse
+
+        superadmin = get_user_model().objects.get(username="demo_superadmin")
+        self.client.force_login(superadmin)
+        self.assertEqual(self.client.get(reverse("core:demo_guia")).status_code, 404)
+
+    def test_banner_y_sidebar_solo_en_demo(self):
+        from django.urls import reverse
+        from instituciones.models import UsuarioInstitucion
+
+        self.client.login(username="demo_propietario", password="AulaProDemo2026!")
+        response = self.client.get(reverse("core:institucion_dashboard"))
+        self.assertContains(response, "Estás usando el entorno de demostración de AulaPro")
+        self.assertContains(response, "Guía del Demo")
+
+        otra = Institucion.objects.create(nombre="Colegio Real", codigo="REAL-BANNER")
+        usuario = get_user_model().objects.create_user(username="propietario-real", password="segura-123")
+        asignacion = UsuarioInstitucion.objects.create(usuario=usuario, institucion=otra, rol=UsuarioInstitucion.Rol.PROPIETARIO)
+        self.client.force_login(usuario)
+        session = self.client.session
+        session["asignacion_institucion_id"] = asignacion.pk
+        session.save()
+        response = self.client.get(reverse("core:institucion_dashboard"))
+        self.assertNotContains(response, "Estás usando el entorno de demostración de AulaPro")
+        self.assertNotContains(response, "Guía del Demo")
+        self.assertNotContains(response, "AulaProDemo2026!")

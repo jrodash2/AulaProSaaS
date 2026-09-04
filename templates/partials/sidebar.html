@@ -1,6 +1,10 @@
 <aside class="sidebar" id="sidebar">
   <a class="brand" href="{% url 'core:inicio' %}"><span class="brand-mark">A</span><span class="nav-label">AulaPro</span></a>
   <nav class="sidebar-nav" aria-label="Navegación principal">
+    {% if es_entorno_demo %}
+      <p class="nav-section nav-label">Centro demo</p>
+      <a class="nav-item {% if request.resolver_match.url_name == 'demo_guia' %}active{% endif %}" href="{% url 'core:demo_guia' %}"><i class="bi bi-play-circle" aria-hidden="true"></i><span class="nav-label">Guía del Demo</span></a>
+    {% endif %}
     {% if es_superadministrador %}
       <p class="nav-section nav-label">Plataforma</p>
       <a class="nav-item {% if request.resolver_match.url_name == 'global_dashboard' %}active{% endif %}" href="{% url 'core:global_dashboard' %}"><i class="bi bi-grid-1x2"></i><span class="nav-label">Inicio</span></a>

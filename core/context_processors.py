@@ -14,4 +14,5 @@ def aulapro_context(request):
         "modulos_saas": modulos,
         "suscripcion_actual": getattr(request, "suscripcion_actual", None),
         "static_asset_version": settings.STATIC_ASSET_VERSION,
+        "es_entorno_demo": getattr(getattr(request, "institucion", None), "codigo", None) == "AULAPRO-DEMO",
     }

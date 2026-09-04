@@ -9,6 +9,8 @@ python manage.py crear_demo_aulapro
 
 El comando es transaccional e idempotente. Puede ejecutarse repetidamente; administra únicamente la institución `AULAPRO-DEMO` mediante claves naturales estables.
 
+Después de iniciar sesión en la institución demo, abra **Centro demo → Guía del Demo** o visite `/demo/guia/`. El centro muestra conteos actuales, credenciales, accesos permitidos por rol y recorridos recomendados; responde 404 fuera de `AULAPRO-DEMO`.
+
 ## Credenciales
 
 Contraseña común: `AulaProDemo2026!`.

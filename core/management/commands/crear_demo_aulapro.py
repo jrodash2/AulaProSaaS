@@ -544,14 +544,15 @@ class Command(BaseCommand):
             orden=25,
             defaults={"nombre": "Recreo", "hora_inicio": time(8, 30), "hora_fin": time(8, 50), "tipo": "RECREO", "activo": True},
         )
-        for dia, bloque in zip(("LUNES", "MIERCOLES", "VIERNES"), bloques_demo):
-            HorarioClase.objects.update_or_create(
-                institucion=institucion,
-                seccion=seccion,
-                dia_semana=dia,
-                bloque=bloque,
-                defaults={"ciclo": ciclo, "jornada": jornada, "asignacion_docente": asignacion, "aula": aula_demo, "activo": True},
-            )
+        if HorarioClase.objects.filter(institucion=institucion).count() <= 3:
+            for dia, bloque in zip(("LUNES", "MIERCOLES", "VIERNES"), bloques_demo):
+                HorarioClase.objects.update_or_create(
+                    institucion=institucion,
+                    seccion=seccion,
+                    dia_semana=dia,
+                    bloque=bloque,
+                    defaults={"ciclo": ciclo, "jornada": jornada, "asignacion_docente": asignacion, "aula": aula_demo, "activo": True},
+                )
 
         from seguimiento.models import CategoriaSeguimiento, CompromisoSeguimiento, RegistroSeguimiento, ReunionSeguimiento
         categorias = {}
@@ -585,9 +586,13 @@ class Command(BaseCommand):
             TipoEvaluacionAdmision.objects.update_or_create(institucion=institucion, nombre=nombre, defaults={"punteo_maximo": 100, "punteo_minimo_referencia": 60, "activo": True})
         estados_admision = ("NUEVA", "NUEVA", "DOCUMENTACION_PENDIENTE", "DOCUMENTACION_PENDIENTE", "EVALUACION_PENDIENTE", "EVALUACION_PENDIENTE", "APROBADA", "APROBADA", "LISTA_ESPERA", "INSCRITA")
         for indice, estado_admision in enumerate(estados_admision, 1):
-            aspirante, _ = Aspirante.objects.update_or_create(institucion=institucion, nombres=f"Aspirante {indice}", apellidos="Demo", fecha_nacimiento=date(2017, 1, min(indice, 28)), defaults={"sexo": "F" if indice % 2 else "M", "correo": f"familia{(indice + 1) // 2}@demo.test", "estado": "INSCRITO" if estado_admision == "INSCRITA" else "EN_PROCESO", "creado_por": secretaria})
+            aspirante = Aspirante.objects.filter(institucion=institucion, nombres=f"Aspirante {indice}").order_by("pk").first()
+            aspirante = aspirante or Aspirante(institucion=institucion, nombres=f"Aspirante {indice}", fecha_nacimiento=date(2017, 1, min(indice, 28)))
+            aspirante.apellidos = "Demo"; aspirante.fecha_nacimiento = date(2017, 1, min(indice, 28)); aspirante.sexo = "F" if indice % 2 else "M"; aspirante.correo = f"familia{(indice + 1) // 2}@demo.test"; aspirante.estado = "INSCRITO" if estado_admision == "INSCRITA" else "EN_PROCESO"; aspirante.creado_por = secretaria; aspirante.save()
             EncargadoAspirante.objects.update_or_create(institucion=institucion, aspirante=aspirante, es_principal=True, defaults={"nombres": f"Encargado {(indice + 1) // 2}", "apellidos": "Demo", "parentesco": "PADRE", "telefono": "55550000", "correo": f"familia{(indice + 1) // 2}@demo.test"})
-            SolicitudAdmision.objects.update_or_create(institucion=institucion, aspirante=aspirante, ciclo_solicitado=ciclo, defaults={"oferta_solicitada": oferta, "grado_solicitado": grado, "jornada_solicitada": jornada, "estado": estado_admision, "origen": ("REFERIDO", "REDES_SOCIALES", "PAGINA_WEB", "PUBLICIDAD", "VISITA")[indice % 5], "creada_por": secretaria})
+            solicitud = SolicitudAdmision.objects.filter(institucion=institucion, aspirante=aspirante).order_by("pk").first()
+            solicitud = solicitud or SolicitudAdmision(institucion=institucion, aspirante=aspirante, ciclo_solicitado=ciclo)
+            solicitud.ciclo_solicitado = ciclo; solicitud.oferta_solicitada = oferta; solicitud.grado_solicitado = grado; solicitud.jornada_solicitada = jornada; solicitud.estado = estado_admision; solicitud.origen = ("REFERIDO", "REDES_SOCIALES", "PAGINA_WEB", "PUBLICIDAD", "VISITA")[indice % 5]; solicitud.creada_por = secretaria; solicitud.save()
 
         from rrhh.models import AreaLaboral, ContratoLaboral, DocumentoEmpleado, Empleado, PermisoLaboral, PuestoLaboral, TipoDocumentoEmpleado
         areas_rrhh = {}
@@ -600,7 +605,11 @@ class Command(BaseCommand):
         empleados_rrhh = []
         for indice, (puesto_codigo, rol_usuario, nombres, apellidos, docente_vinculado) in enumerate(perfiles_rrhh, 1):
             puesto = puestos_rrhh[puesto_codigo]; usuario_vinculado = usuarios.get(rol_usuario) if rol_usuario else None
-            empleado, _ = Empleado.objects.update_or_create(institucion=institucion, nombres=nombres, apellidos=apellidos, defaults={"puesto": puesto, "area": puesto.area, "fecha_ingreso": date(2024, 1, 15), "estado": "ACTIVO", "usuario": usuario_vinculado, "docente": docente_vinculado, "creado_por": admin})
+            empleado = Empleado.objects.filter(institucion=institucion, docente=docente_vinculado).first() if docente_vinculado else None
+            empleado = empleado or (Empleado.objects.filter(institucion=institucion, usuario=usuario_vinculado).first() if usuario_vinculado else None)
+            empleado = empleado or Empleado.objects.filter(institucion=institucion, nombres=nombres, apellidos=apellidos).first()
+            empleado = empleado or Empleado(institucion=institucion, nombres=nombres, apellidos=apellidos)
+            empleado.puesto = puesto; empleado.area = puesto.area; empleado.fecha_ingreso = date(2024, 1, 15); empleado.estado = "ACTIVO"; empleado.usuario = usuario_vinculado; empleado.docente = docente_vinculado; empleado.creado_por = admin; empleado.save()
             empleados_rrhh.append(empleado)
         hoy_rrhh = timezone.localdate()
         for indice, empleado in enumerate(empleados_rrhh):
@@ -612,6 +621,9 @@ class Command(BaseCommand):
             DocumentoEmpleado.objects.get_or_create(institucion=institucion, empleado=empleado, tipo_documento=tipo_dpi, defaults={"estado": "ENTREGADO", "observaciones": "Metadato demo sin archivo binario.", "cargado_por": admin})
         for indice, estado_permiso in enumerate(("PENDIENTE", "APROBADO", "RECHAZADO")):
             PermisoLaboral.objects.update_or_create(institucion=institucion, empleado=empleados_rrhh[indice], tipo=("PERSONAL", "VACACIONES", "ESTUDIO")[indice], fecha_inicio=hoy_rrhh + timedelta(days=indice + 2), defaults={"fecha_fin": hoy_rrhh + timedelta(days=indice + 2), "motivo": "Solicitud administrativa demo.", "estado": estado_permiso, "solicitado_por": empleados_rrhh[indice].usuario or admin, "autorizado_por": admin if estado_permiso != "PENDIENTE" else None, "fecha_resolucion": timezone.now() if estado_permiso != "PENDIENTE" else None})
+
+        from core.demo.expanded import ampliar_demo
+        resumen = ampliar_demo(institucion, nivel, usuarios, admin)
 
         self.stdout.write(self.style.SUCCESS("Datos demo de AulaPro creados/actualizados correctamente."))
         self.stdout.write("")
@@ -626,7 +638,10 @@ class Command(BaseCommand):
         self.stdout.write("  demo_secretaria   - Secretaría")
         self.stdout.write("  demo_contabilidad - Contabilidad")
         self.stdout.write("  demo_docente      - Docente")
+        self.stdout.write("  demo_padre        - Padre / encargado")
+        self.stdout.write("  demo_alumno       - Alumno")
         self.stdout.write(f"Contraseña común: {password}")
         self.stdout.write("")
-        self.stdout.write("Incluye ciclo, jornada, oferta, grado, sección, cursos, 12 alumnos,")
-        self.stdout.write("encargado/familia, docente, asignación, asistencia y calificaciones demo.")
+        self.stdout.write("Resumen de datos integrales:")
+        for etiqueta, total in resumen.items():
+            self.stdout.write(f"  {etiqueta}: {total}")

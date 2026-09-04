@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block title %}{{ titulo }}{% endblock %}{% block content %}<section class="panel compact-form"><h1>{{ titulo }}</h1><form method="post">{% csrf_token %}{{ form.as_p }}<div class="form-actions"><a class="btn btn-light" href="javascript:history.back()">Cancelar</a><button class="btn btn-primary">Guardar</button></div></form></section>{% endblock %}

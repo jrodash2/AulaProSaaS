@@ -55,6 +55,10 @@ INSTALLED_APPS = [
     "comunicaciones",
     "reportes",
     "suscripciones",
+    "horarios",
+    "seguimiento",
+    "admisiones",
+    "rrhh",
 ]
 
 MIDDLEWARE = [
@@ -157,6 +161,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "/static/"
+STATIC_ASSET_VERSION = os.getenv("STATIC_ASSET_VERSION", "20260828.1")
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 

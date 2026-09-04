@@ -1,7 +1,7 @@
 from django import forms
 from django.utils import timezone
 from academico.models import CicloEscolar, GradoInstitucion, OfertaAcademica, Seccion
-from .models import Alumno, AlumnoEncargado, Encargado, Familia, Inscripcion
+from .models import Alumno, AlumnoEncargado, DocumentoAlumno, Encargado, Familia, Inscripcion, RequisitoDocumentoAlumno, TipoDocumentoAlumno
 
 class StyledMixin:
     def style(self):
@@ -60,3 +60,35 @@ class ImportarForm(StyledMixin,forms.Form):
         if f.size>5*1024*1024: raise forms.ValidationError("El archivo no puede superar 5 MB.")
         if f.read(4)!=b"PK\x03\x04": raise forms.ValidationError("El contenido no corresponde a un archivo XLSX válido.")
         f.seek(0); return f
+
+class TipoDocumentoAlumnoForm(StyledMixin,forms.ModelForm):
+    class Meta:model=TipoDocumentoAlumno;exclude=("institucion","fecha_creacion","fecha_actualizacion")
+    def __init__(self,*a,**kw):super().__init__(*a,**kw);self.style()
+
+class RequisitoDocumentoAlumnoForm(StyledMixin,forms.ModelForm):
+    class Meta:model=RequisitoDocumentoAlumno;exclude=("institucion","fecha_creacion","fecha_actualizacion")
+    def __init__(self,*a,institucion,**kw):
+        super().__init__(*a,**kw);self.fields["tipo_documento"].queryset=TipoDocumentoAlumno.objects.filter(institucion=institucion,activo=True)
+        self.fields["aplica_a_oferta"].queryset=OfertaAcademica.objects.filter(institucion=institucion);self.fields["aplica_a_grado"].queryset=GradoInstitucion.objects.filter(institucion=institucion);self.fields["aplica_a_ciclo"].queryset=CicloEscolar.objects.filter(institucion=institucion);self.style()
+
+class DocumentoAlumnoForm(StyledMixin,forms.ModelForm):
+    class Meta:
+        model=DocumentoAlumno;fields=("tipo_documento","inscripcion","ciclo","archivo","numero_documento","fecha_emision","fecha_vencimiento","observaciones","reemplaza_a")
+        widgets={"fecha_emision":forms.DateInput(attrs={"type":"date"}),"fecha_vencimiento":forms.DateInput(attrs={"type":"date"}),"reemplaza_a":forms.HiddenInput()}
+    def __init__(self,*a,institucion,alumno,portal=False,**kw):
+        super().__init__(*a,**kw);tipos=TipoDocumentoAlumno.objects.filter(institucion=institucion,activo=True)
+        if portal:tipos=tipos.filter(visible_portal=True)
+        self.fields["tipo_documento"].queryset=tipos;self.fields["inscripcion"].queryset=alumno.inscripciones.all();self.fields["ciclo"].queryset=CicloEscolar.objects.filter(institucion=institucion);self.fields["reemplaza_a"].queryset=alumno.documentos.all();self.style()
+    def clean_archivo(self):
+        archivo=self.cleaned_data.get("archivo")
+        if not archivo:raise forms.ValidationError("Seleccione un archivo.")
+        return archivo
+
+class RevisionDocumentoForm(StyledMixin,forms.Form):
+    estado=forms.ChoiceField(choices=(("APROBADO","Aprobar"),("RECHAZADO","Rechazar"),("NO_APLICA","No aplica")))
+    motivo=forms.CharField(required=False,widget=forms.Textarea(attrs={"rows":3}))
+    def __init__(self,*a,**kw):super().__init__(*a,**kw);self.style()
+    def clean(self):
+        data=super().clean()
+        if data.get("estado") in ("RECHAZADO","NO_APLICA") and not data.get("motivo","").strip():self.add_error("motivo","Indique el motivo.")
+        return data

@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, time, timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -41,6 +41,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--password", default=DEFAULT_PASSWORD)
+        parser.add_argument("--allow-production-demo", action="store_true", help="Alias compatible para permitir datos demo en producción.")
         parser.add_argument(
             "--permitir-produccion",
             action="store_true",
@@ -49,13 +50,20 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        if not settings.DEBUG and not options["permitir_produccion"]:
+        if not settings.DEBUG and not (options["permitir_produccion"] or options["allow_production_demo"]):
             raise CommandError(
                 "Por seguridad, este comando solo se ejecuta con DEBUG=True. "
                 "Use --permitir-produccion únicamente en un entorno demo controlado."
             )
 
         password = options["password"]
+        # Mantiene compatibilidad con el comando demo histórico del módulo tareas.
+        # Django resuelve nombres de comandos duplicados según INSTALLED_APPS.
+        if options["allow_production_demo"]:
+            from tareas.management.commands.crear_demo_aulapro import Command as TareasDemoCommand
+            comando = TareasDemoCommand(); comando.stdout = self.stdout; comando.stderr = self.stderr
+            comando.handle(allow_production_demo=True)
+            return
         User = get_user_model()
 
         institucion, _ = Institucion.objects.update_or_create(
@@ -106,6 +114,8 @@ class Command(BaseCommand):
                 defaults={"rol": rol, "activo": True},
             )
             usuarios[rol] = usuario
+
+        secretaria = usuarios[UsuarioInstitucion.Rol.SECRETARIA]
 
         superadmin, _ = User.objects.get_or_create(
             username="demo_superadmin",
@@ -318,6 +328,29 @@ class Command(BaseCommand):
             alumnos.append(alumno)
             inscripciones.append(inscripcion)
 
+        for username, first_name, rol in (
+            ("demo_padre", "Encargado", UsuarioInstitucion.Rol.PADRE),
+            ("demo_alumno", "Alumno", UsuarioInstitucion.Rol.ALUMNO),
+        ):
+            usuario_portal, _ = User.objects.get_or_create(username=username)
+            usuario_portal.first_name = first_name
+            usuario_portal.last_name = "Demo"
+            usuario_portal.email = f"{username}@aulapro.local"
+            usuario_portal.activo = True
+            usuario_portal.set_password(password)
+            usuario_portal.save()
+            UsuarioInstitucion.objects.update_or_create(
+                usuario=usuario_portal,
+                institucion=institucion,
+                defaults={"rol": rol, "activo": True},
+            )
+            if rol == UsuarioInstitucion.Rol.PADRE:
+                encargado.usuario = usuario_portal
+                encargado.save(update_fields=("usuario", "fecha_actualizacion"))
+            else:
+                alumnos[0].usuario = usuario_portal
+                alumnos[0].save(update_fields=("usuario", "fecha_actualizacion"))
+
         docente_usuario = usuarios[UsuarioInstitucion.Rol.DOCENTE]
         docente, _ = Docente.objects.update_or_create(
             institucion=institucion,
@@ -475,6 +508,123 @@ class Command(BaseCommand):
                 },
             )
 
+        from alumnos.models import DocumentoAlumno, RequisitoDocumentoAlumno, TipoDocumentoAlumno
+        for orden, (codigo, nombre) in enumerate((("PARTIDA_NACIMIENTO", "Partida de nacimiento"), ("FOTOGRAFIA", "Fotografía"), ("CERTIFICADO_ANTERIOR", "Certificado grado anterior"), ("DOCUMENTO_ENCARGADO", "Documento encargado")), 1):
+            tipo, _ = TipoDocumentoAlumno.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "obligatorio": True, "visible_portal": True, "orden": orden})
+            RequisitoDocumentoAlumno.objects.get_or_create(institucion=institucion, tipo_documento=tipo, defaults={"obligatorio": True})
+        partida = TipoDocumentoAlumno.objects.get(institucion=institucion, codigo="PARTIDA_NACIMIENTO")
+        for index, alumno in enumerate(alumnos[:3]):
+            DocumentoAlumno.objects.get_or_create(institucion=institucion, alumno=alumno, tipo_documento=partida, defaults={"estado": "RECHAZADO" if index == 2 else "APROBADO", "motivo_rechazo": "Archivo ilegible." if index == 2 else "", "cargado_por": admin, "revisado_por": admin, "fecha_revision": timezone.now()})
+
+        # Horario demo idempotente. La asignación docente sigue siendo la fuente
+        # de verdad del curso y profesor; no se duplican esos datos en la clase.
+        from horarios.models import Aula, BloqueHorario, HorarioClase
+        aula_demo, _ = Aula.objects.update_or_create(
+            institucion=institucion,
+            codigo="AULA-1",
+            defaults={"nombre": "Aula 1", "capacidad": 35, "activa": True},
+        )
+        Aula.objects.update_or_create(
+            institucion=institucion,
+            codigo="LAB",
+            defaults={"nombre": "Laboratorio", "capacidad": 24, "activa": True},
+        )
+        bloques_demo = []
+        for orden, inicio, fin in ((10, time(7, 0), time(7, 45)), (20, time(7, 45), time(8, 30)), (30, time(8, 50), time(9, 35))):
+            bloque, _ = BloqueHorario.objects.update_or_create(
+                institucion=institucion,
+                jornada=jornada,
+                orden=orden,
+                defaults={"nombre": f"Período {orden // 10}", "hora_inicio": inicio, "hora_fin": fin, "tipo": "CLASE", "activo": True},
+            )
+            bloques_demo.append(bloque)
+        BloqueHorario.objects.update_or_create(
+            institucion=institucion,
+            jornada=jornada,
+            orden=25,
+            defaults={"nombre": "Recreo", "hora_inicio": time(8, 30), "hora_fin": time(8, 50), "tipo": "RECREO", "activo": True},
+        )
+        if HorarioClase.objects.filter(institucion=institucion).count() <= 3:
+            for dia, bloque in zip(("LUNES", "MIERCOLES", "VIERNES"), bloques_demo):
+                HorarioClase.objects.update_or_create(
+                    institucion=institucion,
+                    seccion=seccion,
+                    dia_semana=dia,
+                    bloque=bloque,
+                    defaults={"ciclo": ciclo, "jornada": jornada, "asignacion_docente": asignacion, "aula": aula_demo, "activo": True},
+                )
+
+        from seguimiento.models import CategoriaSeguimiento, CompromisoSeguimiento, RegistroSeguimiento, ReunionSeguimiento
+        categorias = {}
+        for orden, codigo, nombre, tipo in (
+            (1, "PUNTUALIDAD", "Puntualidad", "INCIDENCIA"), (2, "RESPONSABILIDAD", "Responsabilidad", "POSITIVO"),
+            (3, "CONVIVENCIA", "Convivencia", "CONVIVENCIA"), (4, "RENDIMIENTO", "Rendimiento académico", "ACADEMICO"),
+            (5, "PARTICIPACION", "Participación", "POSITIVO"), (6, "LIDERAZGO", "Liderazgo", "POSITIVO"),
+        ):
+            categorias[codigo], _ = CategoriaSeguimiento.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "tipo": tipo, "orden": orden, "activo": True})
+        datos = (
+            (alumnos[0], inscripciones[0], "PARTICIPACION", "POSITIVO", "Excelente participación", "PUBLICABLE_PORTAL", "ABIERTO", "NO_APLICA"),
+            (alumnos[1], inscripciones[1], "LIDERAZGO", "POSITIVO", "Liderazgo solidario", "PADRES", "RESUELTO", "NO_APLICA"),
+            (alumnos[0], inscripciones[0], "PUNTUALIDAD", "INCIDENCIA", "Llegadas tarde recurrentes", "PADRES", "EN_SEGUIMIENTO", "MEDIA"),
+            (alumnos[2], inscripciones[2], "CONVIVENCIA", "CONVIVENCIA", "Acuerdo de convivencia", "DOCENTES", "ABIERTO", "BAJA"),
+        )
+        registros = []
+        for alumno, inscripcion, codigo, tipo, titulo, privacidad, estado, gravedad in datos:
+            registro, _ = RegistroSeguimiento.objects.update_or_create(
+                institucion=institucion, alumno=alumno, ciclo=ciclo, titulo=titulo,
+                defaults={"inscripcion": inscripcion, "categoria": categorias[codigo], "tipo": tipo, "fecha": date(2026, 8, 28), "descripcion": "Registro demostrativo de acompañamiento estudiantil.", "gravedad": gravedad, "confidencialidad": privacidad, "docente": docente, "registrado_por": admin, "estado": estado},
+            ); registros.append(registro)
+        for registro, descripcion, responsable in ((registros[2], "Mejorar puntualidad durante el mes.", "ALUMNO"), (registros[3], "Dar seguimiento conjunto en casa.", "PADRE")):
+            CompromisoSeguimiento.objects.get_or_create(institucion=institucion, registro=registro, descripcion=descripcion, defaults={"responsable": responsable, "fecha_compromiso": date(2026, 8, 29), "fecha_limite": date(2026, 9, 15), "creado_por": admin})
+        ReunionSeguimiento.objects.get_or_create(institucion=institucion, alumno=alumnos[0], registro=registros[2], motivo="Seguimiento de puntualidad", defaults={"fecha": timezone.now(), "encargado": encargado, "participantes": "Dirección, encargado y estudiante", "acuerdos": "Revisar avances en dos semanas.", "creado_por": admin})
+
+        from admisiones.models import Aspirante, ConfiguracionAdmision, EncargadoAspirante, SolicitudAdmision, TipoDocumentoAdmision, TipoEvaluacionAdmision
+        ConfiguracionAdmision.objects.update_or_create(institucion=institucion, defaults={"admisiones_abiertas": True, "titulo_publico": "Proceso de admisión 2026", "mensaje_publico": "Gracias por considerar Colegio Demo AulaPro.", "ciclo_predeterminado": ciclo, "permitir_carga_documentos": True})
+        for codigo, nombre in (("PARTIDA", "Partida de nacimiento"), ("CERTIFICADO", "Certificado del grado anterior"), ("FOTOGRAFIA", "Fotografía"), ("ENCARGADO", "Documento del encargado")):
+            TipoDocumentoAdmision.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "obligatorio": True, "activo": True})
+        for nombre in ("Matemática", "Lectura", "Entrevista familiar", "Madurez escolar"):
+            TipoEvaluacionAdmision.objects.update_or_create(institucion=institucion, nombre=nombre, defaults={"punteo_maximo": 100, "punteo_minimo_referencia": 60, "activo": True})
+        estados_admision = ("NUEVA", "NUEVA", "DOCUMENTACION_PENDIENTE", "DOCUMENTACION_PENDIENTE", "EVALUACION_PENDIENTE", "EVALUACION_PENDIENTE", "APROBADA", "APROBADA", "LISTA_ESPERA", "INSCRITA")
+        for indice, estado_admision in enumerate(estados_admision, 1):
+            aspirante = Aspirante.objects.filter(institucion=institucion, nombres=f"Aspirante {indice}").order_by("pk").first()
+            aspirante = aspirante or Aspirante(institucion=institucion, nombres=f"Aspirante {indice}", fecha_nacimiento=date(2017, 1, min(indice, 28)))
+            aspirante.apellidos = "Demo"; aspirante.fecha_nacimiento = date(2017, 1, min(indice, 28)); aspirante.sexo = "F" if indice % 2 else "M"; aspirante.correo = f"familia{(indice + 1) // 2}@demo.test"; aspirante.estado = "INSCRITO" if estado_admision == "INSCRITA" else "EN_PROCESO"; aspirante.creado_por = secretaria; aspirante.save()
+            EncargadoAspirante.objects.update_or_create(institucion=institucion, aspirante=aspirante, es_principal=True, defaults={"nombres": f"Encargado {(indice + 1) // 2}", "apellidos": "Demo", "parentesco": "PADRE", "telefono": "55550000", "correo": f"familia{(indice + 1) // 2}@demo.test"})
+            solicitud = SolicitudAdmision.objects.filter(institucion=institucion, aspirante=aspirante).order_by("pk").first()
+            solicitud = solicitud or SolicitudAdmision(institucion=institucion, aspirante=aspirante, ciclo_solicitado=ciclo)
+            solicitud.ciclo_solicitado = ciclo; solicitud.oferta_solicitada = oferta; solicitud.grado_solicitado = grado; solicitud.jornada_solicitada = jornada; solicitud.estado = estado_admision; solicitud.origen = ("REFERIDO", "REDES_SOCIALES", "PAGINA_WEB", "PUBLICIDAD", "VISITA")[indice % 5]; solicitud.creada_por = secretaria; solicitud.save()
+
+        from rrhh.models import AreaLaboral, ContratoLaboral, DocumentoEmpleado, Empleado, PermisoLaboral, PuestoLaboral, TipoDocumentoEmpleado
+        areas_rrhh = {}
+        for orden, codigo, nombre in ((1, "DIRECCION", "Dirección"), (2, "ADMIN", "Administración"), (3, "DOCENCIA", "Docencia"), (4, "CONTABILIDAD", "Contabilidad")):
+            areas_rrhh[codigo], _ = AreaLaboral.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "orden": orden, "activa": True})
+        puestos_rrhh = {}
+        for codigo, nombre, area_codigo, tipo in (("DIRECTOR", "Director", "DIRECCION", "DIRECTIVO"), ("SECRETARIA", "Secretaria", "ADMIN", "ADMINISTRATIVO"), ("CONTADOR", "Contador", "CONTABILIDAD", "ADMINISTRATIVO"), ("PROFESOR", "Profesor de Matemática", "DOCENCIA", "DOCENTE"), ("ASISTENTE", "Asistente administrativo", "ADMIN", "ADMINISTRATIVO")):
+            puestos_rrhh[codigo], _ = PuestoLaboral.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "area": areas_rrhh[area_codigo], "tipo": tipo, "activo": True})
+        perfiles_rrhh = (("DIRECTOR", UsuarioInstitucion.Rol.DIRECTOR, "Director", "Demo", None), ("SECRETARIA", UsuarioInstitucion.Rol.SECRETARIA, "Secretaria", "Demo", None), ("CONTADOR", UsuarioInstitucion.Rol.CONTABILIDAD, "Contabilidad", "Demo", None), ("PROFESOR", UsuarioInstitucion.Rol.DOCENTE, "Docente", "Demo", docente), ("ASISTENTE", None, "Andrea", "Administrativa", None))
+        empleados_rrhh = []
+        for indice, (puesto_codigo, rol_usuario, nombres, apellidos, docente_vinculado) in enumerate(perfiles_rrhh, 1):
+            puesto = puestos_rrhh[puesto_codigo]; usuario_vinculado = usuarios.get(rol_usuario) if rol_usuario else None
+            empleado = Empleado.objects.filter(institucion=institucion, docente=docente_vinculado).first() if docente_vinculado else None
+            empleado = empleado or (Empleado.objects.filter(institucion=institucion, usuario=usuario_vinculado).first() if usuario_vinculado else None)
+            empleado = empleado or Empleado.objects.filter(institucion=institucion, nombres=nombres, apellidos=apellidos).first()
+            empleado = empleado or Empleado(institucion=institucion, nombres=nombres, apellidos=apellidos)
+            empleado.puesto = puesto; empleado.area = puesto.area; empleado.fecha_ingreso = date(2024, 1, 15); empleado.estado = "ACTIVO"; empleado.usuario = usuario_vinculado; empleado.docente = docente_vinculado; empleado.creado_por = admin; empleado.save()
+            empleados_rrhh.append(empleado)
+        hoy_rrhh = timezone.localdate()
+        for indice, empleado in enumerate(empleados_rrhh):
+            estado_contrato = "FINALIZADO" if indice == 4 else "VIGENTE"
+            fin = hoy_rrhh - timedelta(days=120) if indice == 4 else hoy_rrhh + timedelta(days=20 if indice == 3 else 180)
+            ContratoLaboral.objects.update_or_create(institucion=institucion, numero_contrato=f"DEMO-RRHH-{indice + 1:03d}", defaults={"empleado": empleado, "tipo_contrato": "PLAZO_FIJO", "fecha_inicio": date(2025, 1, 1), "fecha_fin": fin, "puesto": empleado.puesto, "estado": estado_contrato, "creado_por": admin})
+        tipo_dpi, _ = TipoDocumentoEmpleado.objects.update_or_create(institucion=institucion, codigo="DPI", defaults={"nombre": "Documento personal de identificación", "obligatorio": True, "activo": True})
+        for empleado in empleados_rrhh:
+            DocumentoEmpleado.objects.get_or_create(institucion=institucion, empleado=empleado, tipo_documento=tipo_dpi, defaults={"estado": "ENTREGADO", "observaciones": "Metadato demo sin archivo binario.", "cargado_por": admin})
+        for indice, estado_permiso in enumerate(("PENDIENTE", "APROBADO", "RECHAZADO")):
+            PermisoLaboral.objects.update_or_create(institucion=institucion, empleado=empleados_rrhh[indice], tipo=("PERSONAL", "VACACIONES", "ESTUDIO")[indice], fecha_inicio=hoy_rrhh + timedelta(days=indice + 2), defaults={"fecha_fin": hoy_rrhh + timedelta(days=indice + 2), "motivo": "Solicitud administrativa demo.", "estado": estado_permiso, "solicitado_por": empleados_rrhh[indice].usuario or admin, "autorizado_por": admin if estado_permiso != "PENDIENTE" else None, "fecha_resolucion": timezone.now() if estado_permiso != "PENDIENTE" else None})
+
+        from core.demo.expanded import ampliar_demo
+        resumen = ampliar_demo(institucion, nivel, usuarios, admin)
+
         self.stdout.write(self.style.SUCCESS("Datos demo de AulaPro creados/actualizados correctamente."))
         self.stdout.write("")
         self.stdout.write("Institución: Colegio Demo AulaPro")
@@ -488,7 +638,10 @@ class Command(BaseCommand):
         self.stdout.write("  demo_secretaria   - Secretaría")
         self.stdout.write("  demo_contabilidad - Contabilidad")
         self.stdout.write("  demo_docente      - Docente")
+        self.stdout.write("  demo_padre        - Padre / encargado")
+        self.stdout.write("  demo_alumno       - Alumno")
         self.stdout.write(f"Contraseña común: {password}")
         self.stdout.write("")
-        self.stdout.write("Incluye ciclo, jornada, oferta, grado, sección, cursos, 12 alumnos,")
-        self.stdout.write("encargado/familia, docente, asignación, asistencia y calificaciones demo.")
+        self.stdout.write("Resumen de datos integrales:")
+        for etiqueta, total in resumen.items():
+            self.stdout.write(f"  {etiqueta}: {total}")

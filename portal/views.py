@@ -4,7 +4,11 @@ from django.db import transaction
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404,redirect,render
 from django.utils import timezone
-from alumnos.models import Alumno, Encargado
+from alumnos.models import Alumno, DocumentoAlumno, Encargado, Inscripcion, TipoDocumentoAlumno
+from alumnos.forms import DocumentoAlumnoForm
+from alumnos.services import resumen_expediente
+from suscripciones.services import modulo_habilitado
+from auditoria.services import registrar_evento
 from asistencia.models import RegistroAsistencia
 from calificaciones.models import Calificacion
 from cuentas.models import Usuario
@@ -33,6 +37,35 @@ def seleccionar(request,pk):
 
 @portal_role_required("PADRE","ALUMNO")
 def estudiante(request,pk): return render(request,"portal/estudiante.html",resumen_alumno(get_alumno_portal(request,pk)))
+
+@portal_role_required("PADRE","ALUMNO")
+def documentos(request,pk):
+    alumno=get_alumno_portal(request,pk)
+    if not modulo_habilitado(request.institucion,"EXPEDIENTE"):raise PermissionDenied
+    docs=alumno.documentos.filter(tipo_documento__visible_portal=True).select_related("tipo_documento")
+    return render(request,"portal/documentos.html",{"alumno":alumno,"resumen":resumen_expediente(alumno,visible_portal=True),"documentos":docs,"puede_subir":rol_portal(request)=="PADRE"})
+
+@portal_role_required("PADRE")
+def documento_subir(request,pk):
+    alumno=get_alumno_portal(request,pk)
+    if not modulo_habilitado(request.institucion,"EXPEDIENTE"):raise PermissionDenied
+    reemplaza=get_object_or_404(DocumentoAlumno,institucion=request.institucion,alumno=alumno,tipo_documento__visible_portal=True,pk=request.GET["reemplaza"]) if request.GET.get("reemplaza") else None
+    tipo=get_object_or_404(TipoDocumentoAlumno,institucion=request.institucion,activo=True,visible_portal=True,pk=request.GET["tipo"]) if request.GET.get("tipo") else None
+    inscripcion_actual=Inscripcion.objects.filter(institucion=request.institucion,alumno=alumno,estado=Inscripcion.Estado.ACTIVA).select_related("ciclo").order_by("-ciclo__anio").first()
+    initial={"tipo_documento":tipo,"inscripcion":inscripcion_actual,"ciclo":inscripcion_actual.ciclo if inscripcion_actual else None}
+    if reemplaza:initial.update({"reemplaza_a":reemplaza,"tipo_documento":reemplaza.tipo_documento,"inscripcion":reemplaza.inscripcion or inscripcion_actual,"ciclo":reemplaza.ciclo or (inscripcion_actual.ciclo if inscripcion_actual else None)})
+    form=DocumentoAlumnoForm(request.POST or None,request.FILES or None,institucion=request.institucion,alumno=alumno,portal=True,initial=initial)
+    if request.method=="POST" and form.is_valid():
+        doc=form.save(commit=False);doc.institucion=request.institucion;doc.alumno=alumno;doc.cargado_por=request.user;doc.estado=DocumentoAlumno.Estado.ENTREGADO;doc.nombre_original=form.cleaned_data["archivo"].name.replace("\\","/").rsplit("/",1)[-1];doc.save();registrar_evento(request,"REEMPLAZAR_DOCUMENTO_ALUMNO" if doc.reemplaza_a_id else "SUBIR_DOCUMENTO_ALUMNO",doc);messages.success(request,"Documento enviado para revisión.");return redirect("portal:documentos",pk=alumno.pk)
+    return render(request,"portal/documento_form.html",{"alumno":alumno,"form":form})
+
+@portal_role_required("PADRE","ALUMNO")
+def documento_descargar(request,pk,documento_pk):
+    alumno=get_alumno_portal(request,pk)
+    if not modulo_habilitado(request.institucion,"EXPEDIENTE"):raise PermissionDenied
+    doc=get_object_or_404(DocumentoAlumno,pk=documento_pk,institucion=request.institucion,alumno=alumno,tipo_documento__visible_portal=True)
+    if not doc.archivo:raise PermissionDenied
+    return FileResponse(doc.archivo.open("rb"),as_attachment=True,filename=doc.nombre_original)
 
 @portal_role_required("PADRE","ALUMNO")
 def asistencia(request,pk):

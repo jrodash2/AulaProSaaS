@@ -72,3 +72,91 @@ def ejecutar_importacion(registro):
         if encargado: AlumnoEncargado.objects.get_or_create(institucion=registro.institucion,alumno=alumno,encargado=encargado,defaults={"parentesco":str(d["PARENTESCO"] or "OTRO").upper(),"parentesco_otro":"No especificado" if str(d["PARENTESCO"] or "OTRO").upper()=="OTRO" else "","es_principal":str(d["PRINCIPAL"] or "").upper() in ("SI","SÍ","1","TRUE"),"es_responsable_financiero":str(d["RESPONSABLE_FINANCIERO"] or "").upper() in ("SI","SÍ","1","TRUE")})
         g=fila["grado"]; Inscripcion.objects.create(institucion=registro.institucion,alumno=alumno,ciclo=registro.ciclo,oferta_academica=g.oferta,grado=g,seccion=fila["seccion"],fecha_inscripcion=timezone.localdate()); inscripciones+=1
     registro.estado=ImportacionAlumnos.Estado.PROCESADA; registro.total_filas=len(resultado["filas"]); registro.creados=creados; registro.actualizados=existentes; registro.inscripciones_creadas=inscripciones; registro.errores=0; registro.fecha_fin=timezone.now(); registro.save(); return registro
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.utils import timezone
+
+from academico.models import ResultadoAnualAlumno
+
+
+@transaction.atomic
+def reinscribir_alumno(*, resultado, ciclo_destino, seccion_destino):
+    """Crea la inscripción anual de forma tenant-safe e idempotente."""
+    from suscripciones.services import suscripcion_actual
+    from .models import Inscripcion
+
+    resultado = ResultadoAnualAlumno.objects.select_for_update().select_related("inscripcion", "alumno").get(pk=resultado.pk)
+    if resultado.institucion_id != ciclo_destino.institucion_id or seccion_destino.institucion_id != resultado.institucion_id:
+        raise ValidationError("Todos los datos deben pertenecer a la misma institución.")
+    if seccion_destino.ciclo_id != ciclo_destino.pk:
+        raise ValidationError("La sección no pertenece al ciclo destino.")
+    permitidos = (ResultadoAnualAlumno.Resultado.PROMOVIDO, ResultadoAnualAlumno.Resultado.NO_PROMOVIDO)
+    if resultado.resultado_final not in permitidos:
+        raise ValidationError("El resultado confirmado no es elegible para reinscripción.")
+    esperado = resultado.inscripcion.grado.orden + (1 if resultado.resultado_final == ResultadoAnualAlumno.Resultado.PROMOVIDO else 0)
+    if seccion_destino.grado.orden != esperado:
+        raise ValidationError("El grado destino no corresponde a la promoción propuesta.")
+    existente = Inscripcion.objects.filter(alumno=resultado.alumno, ciclo=ciclo_destino, estado=Inscripcion.Estado.ACTIVA).first()
+    if existente:
+        return existente, False
+    ocupados = Inscripcion.objects.select_for_update().filter(seccion=seccion_destino, estado=Inscripcion.Estado.ACTIVA).count()
+    if seccion_destino.capacidad is not None and ocupados >= seccion_destino.capacidad:
+        raise ValidationError("La sección destino no tiene capacidad disponible.")
+    suscripcion = suscripcion_actual(resultado.institucion)
+    usados = Inscripcion.objects.filter(institucion=resultado.institucion, ciclo=ciclo_destino, estado=Inscripcion.Estado.ACTIVA).count()
+    if suscripcion and suscripcion.limite_alumnos is not None and usados + 1 > suscripcion.limite_alumnos:
+        raise ValidationError("La reinscripción excede el límite de alumnos del plan.")
+    inscripcion = Inscripcion.objects.create(institucion=resultado.institucion, alumno=resultado.alumno, ciclo=ciclo_destino,
+        oferta_academica=seccion_destino.grado.oferta, grado=seccion_destino.grado, seccion=seccion_destino,
+        fecha_inscripcion=timezone.localdate(), estado=Inscripcion.Estado.ACTIVA, es_reingreso=True)
+    return inscripcion, True
+
+
+@transaction.atomic
+def reinscripcion_masiva(*, asignaciones):
+    """Procesa (resultado, ciclo, sección) en una única transacción."""
+    return [reinscribir_alumno(resultado=r, ciclo_destino=c, seccion_destino=s) for r, c, s in asignaciones]
+
+
+def requisitos_aplicables(alumno, inscripcion=None, visible_portal=False):
+    from django.db.models import Q
+    from .models import RequisitoDocumentoAlumno
+    inscripcion = inscripcion or alumno.inscripciones.filter(estado="ACTIVA").select_related("ciclo","oferta_academica__nivel","grado").first()
+    qs=RequisitoDocumentoAlumno.objects.filter(institucion=alumno.institucion,activo=True,tipo_documento__activo=True).select_related("tipo_documento")
+    if visible_portal:qs=qs.filter(tipo_documento__visible_portal=True)
+    if not inscripcion:aplicables=qs.filter(aplica_a_nivel__isnull=True,aplica_a_oferta__isnull=True,aplica_a_grado__isnull=True,aplica_a_ciclo__isnull=True)
+    else:aplicables=qs.filter(Q(aplica_a_nivel__isnull=True)|Q(aplica_a_nivel=inscripcion.oferta_academica.nivel),Q(aplica_a_oferta__isnull=True)|Q(aplica_a_oferta=inscripcion.oferta_academica),Q(aplica_a_grado__isnull=True)|Q(aplica_a_grado=inscripcion.grado),Q(aplica_a_ciclo__isnull=True)|Q(aplica_a_ciclo=inscripcion.ciclo))
+    efectivos={}
+    def especificidad(req):
+        return ((16 if req.aplica_a_grado_id else 0)+(8 if req.aplica_a_oferta_id else 0)+(4 if req.aplica_a_nivel_id else 0)+(2 if req.aplica_a_ciclo_id else 0),-req.pk)
+    for req in aplicables:
+        actual=efectivos.get(req.tipo_documento_id)
+        if actual is None or especificidad(req)>especificidad(actual):efectivos[req.tipo_documento_id]=req
+    return sorted(efectivos.values(),key=lambda req:(req.tipo_documento.orden,req.tipo_documento.nombre,req.pk))
+
+
+def resumen_expediente(alumno, inscripcion=None, visible_portal=False):
+    from .models import DocumentoAlumno
+    requisitos=list(requisitos_aplicables(alumno,inscripcion,visible_portal));items=[];aprobados=denominador=pendientes=rechazados=0
+    for req in requisitos:
+        documentos=alumno.documentos.filter(tipo_documento=req.tipo_documento).order_by("-fecha_carga")
+        if req.aplica_a_ciclo_id:documentos=documentos.filter(ciclo_id=req.aplica_a_ciclo_id)
+        documento=documentos.first();estado=documento.estado_vigente if documento else DocumentoAlumno.Estado.PENDIENTE
+        obligatorio=req.obligatorio
+        if estado==DocumentoAlumno.Estado.NO_APLICA:obligatorio=False
+        if obligatorio:
+            denominador+=1
+            if estado==DocumentoAlumno.Estado.APROBADO:aprobados+=1
+            else:pendientes+=1
+        if estado==DocumentoAlumno.Estado.RECHAZADO:rechazados+=1
+        items.append({"requisito":req,"documento":documento,"estado":estado,"obligatorio":obligatorio})
+    porcentaje=round(aprobados*100/denominador) if denominador else 100
+    return {"items":items,"aprobados":aprobados,"total":denominador,"pendientes":pendientes,"rechazados":rechazados,"porcentaje":porcentaje,"completo":porcentaje==100}
+
+
+def documentos_por_vencer(institucion,dias=30):
+    from datetime import timedelta
+    from django.utils import timezone
+    from .models import DocumentoAlumno
+    hoy=timezone.localdate()
+    return DocumentoAlumno.objects.filter(institucion=institucion,estado=DocumentoAlumno.Estado.APROBADO,fecha_vencimiento__range=(hoy,hoy+timedelta(days=dias)))

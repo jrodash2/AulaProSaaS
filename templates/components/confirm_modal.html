@@ -1,6 +1,7 @@
-<div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalTitle" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
-    <div class="modal-header"><div class="modal-action-icon"><i class="bi bi-exclamation-triangle"></i></div><div><h2 class="modal-title fs-5" id="confirmModalTitle">Confirmar acción</h2><p class="mb-0 text-muted" id="confirmModalCopy">Esta acción conservará el historial.</p></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
-    <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><form method="post" id="confirmModalForm">{% csrf_token %}<button class="btn btn-danger" id="confirmModalSubmit">Confirmar</button></form></div>
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalTitle" aria-hidden="true" data-debug="{% if debug %}true{% else %}false{% endif %}">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><div class="modal-action-icon" id="confirmModalIcon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div><div class="modal-heading"><h2 class="modal-title fs-5" id="confirmModalTitle">Confirmar acción</h2><p class="mb-0" id="confirmModalCopy">Esta acción conservará el historial.</p></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+    <div class="modal-body"><p>Revise la acción antes de continuar. Los datos históricos no serán eliminados.</p></div>
+    <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><form method="post" id="confirmModalForm">{% csrf_token %}<button type="submit" class="btn btn-danger" id="confirmModalSubmit" disabled>Confirmar</button></form></div>
   </div></div>
 </div>

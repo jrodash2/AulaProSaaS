@@ -3,6 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.http import Http404
+from django.urls import reverse
 from auditoria.models import EventoAuditoria
 from cuentas.forms import AulaProPasswordChangeForm, PerfilForm
 
@@ -10,6 +12,78 @@ from cuentas.models import Usuario
 from instituciones.models import Institucion
 
 from .decorators import institucion_required, superusuario_required
+
+
+DEMO_CODE = "AULAPRO-DEMO"
+
+
+@login_required
+def demo_guia(request):
+    """Guía interna: sin un contexto demo explícito responde siempre 404."""
+    if getattr(getattr(request, "institucion", None), "codigo", None) != DEMO_CODE:
+        raise Http404
+
+    from django.conf import settings
+    from core.demo.services import obtener_resumen_demo
+    from suscripciones.services import modulo_habilitado
+
+    rol = getattr(request.asignacion_institucion, "rol", "")
+    accesos = {
+        "ACADEMICO": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA", "DOCENTE"},
+        "ALUMNOS": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA"},
+        "DOCENTES": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA"},
+        "ASISTENCIA": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA", "DOCENTE"},
+        "CALIFICACIONES": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "DOCENTE"},
+        "TAREAS": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "DOCENTE"},
+        "FINANZAS": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA", "CONTABILIDAD"},
+        "EXPEDIENTE": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA"},
+        "HORARIOS": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA", "DOCENTE"},
+        "SEGUIMIENTO": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "DOCENTE"},
+        "ADMISIONES": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA"},
+        "RRHH": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA", "DOCENTE"},
+        "REPORTES": {"PROPIETARIO", "DIRECTOR", "ADMINISTRADOR", "SECRETARIA", "CONTABILIDAD", "DOCENTE"},
+        "PORTAL": {"PADRE", "ALUMNO"},
+    }
+    definiciones = (
+        ("ACADEMICO", "academico", "Académico", "bi-mortarboard", "Ciclos 2025, 2026 y 2027; tres grados del nivel básico.", ("Oferta académica", "Grados y secciones", "Cursos", "Cierre y resultados", "Reinscripción"), "academico:landing"),
+        ("ALUMNOS", "alumnos", "Alumnos", "bi-person-vcard", "Alumnos, familias, encargados e inscripciones relacionados.", ("Ficha del alumno", "Familia y encargados", "Inscripción", "Expediente", "Historial"), "alumnos:landing"),
+        ("DOCENTES", "docentes", "Docentes", "bi-person-workspace", "Docentes activos, histórico y asignaciones académicas.", ("Ficha docente", "Asignaciones", "Docente guía", "Carga y horario"), "docentes:lista"),
+        ("ASISTENCIA", "asistencia", "Asistencia", "bi-calendar-check", "Sesiones y registros con estados variados.", ("Presentes", "Ausencias", "Tardanzas", "Justificaciones"), "asistencia:dashboard"),
+        ("CALIFICACIONES", "calificaciones", "Calificaciones", "bi-card-checklist", "Períodos, actividades y calificaciones de prueba.", ("Actividades", "Captura", "Edición", "Promedios", "Resultados"), "calificaciones:dashboard"),
+        ("TAREAS", "tareas", "Tareas", "bi-list-task", "Tareas publicadas, próximas y vencidas.", ("Crear", "Publicar", "Revisar entregas", "Consultar portal"), "tareas:dashboard"),
+        ("FINANZAS", "finanzas", "Finanzas", "bi-wallet2", "Cargos, pagos y saldos agregados, sin datos sensibles.", ("Alumno solvente", "Pago parcial", "Saldo pendiente", "Reporte financiero"), "finanzas:dashboard"),
+        ("EXPEDIENTE", "expediente", "Expediente", "bi-folder2-open", "Documentos aprobados, pendientes y rechazados.", ("Checklist", "Subir", "Revisar", "Descargar"), "alumnos:expedientes"),
+        ("HORARIOS", "horarios", "Horarios", "bi-calendar-week", "Aulas, bloques y clases semanales asignadas.", ("Por sección", "Por docente", "Aulas", "Validar conflictos"), "horarios:dashboard"),
+        ("SEGUIMIENTO", "seguimiento", "Seguimiento", "bi-heart-pulse", "Conteos seguros; no se muestran descripciones confidenciales.", ("Reconocimiento", "Incidencia", "Compromiso", "Reunión", "Cierre"), "seguimiento:dashboard"),
+        ("ADMISIONES", "admisiones", "Admisiones", "bi-person-plus", "Solicitudes en todas las etapas del proceso 2027.", ("Solicitud", "Documentos", "Entrevista", "Evaluación", "Aprobación", "Conversión"), "admisiones:dashboard"),
+        ("RRHH", "rrhh", "Recursos Humanos", "bi-briefcase", "Métricas laborales sin salario, DPI ni NIT.", ("Empleado", "Contrato", "Expediente", "Permiso", "Historial"), "rrhh:dashboard"),
+        ("REPORTES", "reportes", "Reportes", "bi-bar-chart", "Indicadores y exportaciones derivados de los datos demo.", ("Dashboard", "Filtros", "Exportar Excel"), "reportes:dashboard"),
+        ("PORTAL", "portal", "Portal Padre", "bi-people", "demo_padre tiene varios hijos con información académica.", ("Cambiar hijo", "Notas", "Asistencia", "Tareas", "Finanzas", "Seguimiento visible"), None),
+        ("PORTAL", "portal", "Portal Alumno", "bi-person-circle", "demo_alumno dispone de una experiencia académica completa.", ("Notas", "Tareas", "Asistencia", "Horario", "Seguimiento visible"), None),
+    )
+    resumen = obtener_resumen_demo(request.institucion)
+    cards = []
+    for codigo, clave, nombre, icono, descripcion, procesos, url_name in definiciones:
+        if not modulo_habilitado(request.institucion, codigo):
+            continue
+        cards.append({
+            "codigo": codigo, "clave": clave, "nombre": nombre, "icono": icono,
+            "descripcion": descripcion, "procesos": procesos, "metricas": resumen.get(clave, {}),
+            "url": reverse(url_name) if url_name and rol in accesos[codigo] else None,
+            "disponible": rol in accesos[codigo],
+        })
+    return render(request, "core/demo_guia.html", {
+        "resumen_demo": resumen,
+        "demo_cards": cards,
+        "demo_password_display": settings.DEMO_PASSWORD_DISPLAY,
+        "demo_usuarios": (
+            ("Propietario", "demo_propietario"), ("Director", "demo_director"),
+            ("Administrador", "demo_admin"), ("Secretaría", "demo_secretaria"),
+            ("Contabilidad", "demo_contabilidad"), ("Docente", "demo_docente"),
+            ("Padre", "demo_padre"), ("Alumno", "demo_alumno"),
+            ("Superadmin", "demo_superadmin"),
+        ),
+    })
 
 
 @login_required

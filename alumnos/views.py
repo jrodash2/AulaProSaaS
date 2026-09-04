@@ -4,17 +4,23 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count,Q
 from django.http import FileResponse,JsonResponse
+from django.core.exceptions import PermissionDenied
+from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404,redirect,render
 from django.utils import timezone
 from openpyxl import Workbook
 from auditoria.services import registrar_evento
 from core.decorators import gestion_alumnos_required,institucion_required
-from academico.models import CicloEscolar,GradoInstitucion,OfertaAcademica,Seccion
-from .forms import AlumnoForm,EncargadoForm,FamiliaForm,ImportarForm,InscripcionForm,RetiroForm,VinculoForm
-from .models import Alumno,AlumnoEncargado,Encargado,Familia,ImportacionAlumnos,Inscripcion
-from .services import crear_plantilla,ejecutar_importacion,prevalidar
+from academico.models import CicloEscolar,GradoInstitucion,OfertaAcademica,ResultadoAnualAlumno,Seccion
+from suscripciones.services import suscripcion_actual
+from .forms import AlumnoForm,DocumentoAlumnoForm,EncargadoForm,FamiliaForm,ImportarForm,InscripcionForm,RequisitoDocumentoAlumnoForm,RetiroForm,RevisionDocumentoForm,TipoDocumentoAlumnoForm,VinculoForm
+from .models import Alumno,AlumnoEncargado,DocumentoAlumno,Encargado,Familia,ImportacionAlumnos,Inscripcion,RequisitoDocumentoAlumno,TipoDocumentoAlumno
+from .services import crear_plantilla,ejecutar_importacion,prevalidar,reinscripcion_masiva,resumen_expediente
+from suscripciones.services import modulo_habilitado
 
 def _alumnos(request): return Alumno.objects.filter(institucion=request.institucion)
+def _expediente_habilitado(request):
+    if not modulo_habilitado(request.institucion,"EXPEDIENTE"):raise PermissionDenied
 def _filtrar(request,qs):
     q=request.GET.get("q","").strip()
     if q:
@@ -62,7 +68,110 @@ def crear(request):
 @institucion_required
 def detalle(request,pk):
     alumno=get_object_or_404(_alumnos(request).select_related("familia").prefetch_related("inscripciones__ciclo","inscripciones__oferta_academica","inscripciones__grado","inscripciones__seccion","vinculos_encargados__encargado"),pk=pk)
-    return render(request,"alumnos/detalle.html",{"alumno":alumno,"inscripcion_actual":alumno.inscripciones.filter(estado=Inscripcion.Estado.ACTIVA).first(),"eventos":alumno.eventos_auditoria.all()[:10] if hasattr(alumno,"eventos_auditoria") else []})
+    return render(request,"alumnos/detalle.html",{"alumno":alumno,"inscripcion_actual":alumno.inscripciones.filter(estado=Inscripcion.Estado.ACTIVA).first(),"eventos":alumno.eventos_auditoria.all()[:10] if hasattr(alumno,"eventos_auditoria") else [],"expediente":resumen_expediente(alumno) if modulo_habilitado(request.institucion,"EXPEDIENTE") else None})
+
+@gestion_alumnos_required
+def expedientes(request):
+    _expediente_habilitado(request);qs=_filtrar(request,_alumnos(request).prefetch_related("inscripciones__grado","inscripciones__seccion"));filas=[]
+    tipo_falta=request.GET.get("tipo_documento")
+    for alumno in qs:
+        resumen=resumen_expediente(alumno)
+        if request.GET.get("estado")=="COMPLETO" and not resumen["completo"]:continue
+        if request.GET.get("estado")=="INCOMPLETO" and resumen["completo"]:continue
+        if tipo_falta and not any(str(x["requisito"].tipo_documento_id)==tipo_falta and x["estado"]!="APROBADO" for x in resumen["items"]):continue
+        filas.append((alumno,resumen))
+    return render(request,"alumnos/expedientes.html",{"filas":filas,"tipos":TipoDocumentoAlumno.objects.filter(institucion=request.institucion,activo=True),"ciclos":CicloEscolar.objects.filter(institucion=request.institucion),"grados":GradoInstitucion.objects.filter(institucion=request.institucion),"secciones":Seccion.objects.filter(institucion=request.institucion)})
+
+@gestion_alumnos_required
+def expediente_alumno(request,alumno_pk):
+    _expediente_habilitado(request);alumno=get_object_or_404(_alumnos(request),pk=alumno_pk)
+    return render(request,"alumnos/expediente_detalle.html",{"alumno":alumno,"resumen":resumen_expediente(alumno),"documentos":alumno.documentos.select_related("tipo_documento","cargado_por","revisado_por")})
+
+@gestion_alumnos_required
+def documento_subir(request,alumno_pk):
+    _expediente_habilitado(request);alumno=get_object_or_404(_alumnos(request),pk=alumno_pk);reemplaza=get_object_or_404(alumno.documentos,pk=request.GET["reemplaza"]) if request.GET.get("reemplaza") else None;form=DocumentoAlumnoForm(request.POST or None,request.FILES or None,institucion=request.institucion,alumno=alumno,initial={"reemplaza_a":reemplaza,"tipo_documento":reemplaza.tipo_documento if reemplaza else None})
+    if request.method=="POST" and form.is_valid():
+        doc=form.save(commit=False);doc.institucion=request.institucion;doc.alumno=alumno;doc.cargado_por=request.user;doc.estado=DocumentoAlumno.Estado.ENTREGADO;doc.nombre_original=form.cleaned_data["archivo"].name.replace("\\","/").rsplit("/",1)[-1];doc.save();registrar_evento(request,"REEMPLAZAR_DOCUMENTO_ALUMNO" if doc.reemplaza_a_id else "SUBIR_DOCUMENTO_ALUMNO",doc);messages.success(request,"Documento cargado para revisión.");return redirect("alumnos:expediente_alumno",alumno_pk=alumno.pk)
+    return render(request,"alumnos/formulario_simple.html",{"form":form,"titulo":"Subir documento","volver":"alumnos:expediente_alumno","volver_pk":alumno.pk})
+
+@gestion_alumnos_required
+@require_POST
+def documento_revisar(request,pk):
+    _expediente_habilitado(request);doc=get_object_or_404(DocumentoAlumno,institucion=request.institucion,pk=pk);form=RevisionDocumentoForm(request.POST)
+    if form.is_valid():
+        doc.estado=form.cleaned_data["estado"];motivo=form.cleaned_data["motivo"].strip();doc.motivo_rechazo=motivo if doc.estado=="RECHAZADO" else "";doc.observaciones=motivo if doc.estado=="NO_APLICA" else doc.observaciones;doc.revisado_por=request.user;doc.fecha_revision=timezone.now();doc.save();accion={"APROBADO":"APROBAR_DOCUMENTO_ALUMNO","RECHAZADO":"RECHAZAR_DOCUMENTO_ALUMNO","NO_APLICA":"MARCAR_NO_APLICA_DOCUMENTO"}[doc.estado];registrar_evento(request,accion,doc);messages.success(request,"Revisión registrada.")
+    else:messages.error(request,"Revise los datos de la decisión.")
+    return redirect("alumnos:expediente_alumno",alumno_pk=doc.alumno_id)
+
+@institucion_required
+def documento_descargar(request,pk):
+    _expediente_habilitado(request);doc=get_object_or_404(DocumentoAlumno,institucion=request.institucion,pk=pk)
+    if request.asignacion_institucion.rol not in ("PROPIETARIO","DIRECTOR","ADMINISTRADOR","SECRETARIA"):raise PermissionDenied
+    if not doc.archivo:raise PermissionDenied
+    return FileResponse(doc.archivo.open("rb"),as_attachment=True,filename=doc.nombre_original)
+
+@gestion_alumnos_required
+def tipos_documento(request):
+    _expediente_habilitado(request);return render(request,"alumnos/tipos_documento.html",{"tipos":TipoDocumentoAlumno.objects.filter(institucion=request.institucion),"requisitos":RequisitoDocumentoAlumno.objects.filter(institucion=request.institucion).select_related("tipo_documento","aplica_a_nivel","aplica_a_oferta","aplica_a_grado","aplica_a_ciclo")})
+@gestion_alumnos_required
+def tipo_documento_form(request):
+    _expediente_habilitado(request);form=TipoDocumentoAlumnoForm(request.POST or None)
+    if request.method=="POST" and form.is_valid():obj=form.save(commit=False);obj.institucion=request.institucion;obj.save();registrar_evento(request,"CREAR_TIPO_DOCUMENTO",obj);return redirect("alumnos:tipos_documento")
+    return render(request,"alumnos/formulario_simple.html",{"form":form,"titulo":"Nuevo tipo documental","volver":"alumnos:tipos_documento"})
+@gestion_alumnos_required
+def requisito_documento_form(request):
+    _expediente_habilitado(request);form=RequisitoDocumentoAlumnoForm(request.POST or None,institucion=request.institucion)
+    if request.method=="POST" and form.is_valid():obj=form.save(commit=False);obj.institucion=request.institucion;obj.save();registrar_evento(request,"CREAR_REQUISITO_DOCUMENTO",obj);return redirect("alumnos:tipos_documento")
+    return render(request,"alumnos/formulario_simple.html",{"form":form,"titulo":"Nuevo requisito documental","volver":"alumnos:tipos_documento"})
+
+@gestion_alumnos_required
+def expedientes_exportar(request):
+    _expediente_habilitado(request);wb=Workbook();ws=wb.active;ws.title="EXPEDIENTES";ws.append(["Alumno","CUI","Grado","Sección","Completitud","Pendientes","Rechazados"])
+    for alumno in _alumnos(request):
+        r=resumen_expediente(alumno);ins=alumno.inscripciones.filter(estado="ACTIVA").select_related("grado","seccion").first();ws.append([alumno.nombre_completo,alumno.cui or "",ins.grado.nombre if ins else "",ins.seccion.nombre if ins else "",r["porcentaje"],r["pendientes"],r["rechazados"]])
+    from io import BytesIO
+    out=BytesIO();wb.save(out);out.seek(0);return FileResponse(out,as_attachment=True,filename="expedientes-aulapro.xlsx")
+
+@gestion_alumnos_required
+def reinscripciones_inicio(request):
+    ciclos=CicloEscolar.objects.filter(institucion=request.institucion).order_by("-anio")
+    destino=get_object_or_404(ciclos,pk=request.GET["ciclo_destino"]) if request.GET.get("ciclo_destino") else ciclos.filter(estado=CicloEscolar.Estado.PLANIFICACION).first()
+    if destino:return redirect("alumnos:reinscripciones_detalle",ciclo_destino=destino.pk)
+    return render(request,"alumnos/reinscripciones_inicio.html",{"ciclos":ciclos})
+
+def _reinscripciones_contexto(request,destino):
+    origen=CicloEscolar.objects.filter(institucion=request.institucion,anio__lt=destino.anio,cerrado=True).order_by("-anio").first()
+    resultados=ResultadoAnualAlumno.objects.none() if not origen else origen.resultados_anuales.select_related("alumno","inscripcion__grado","inscripcion__seccion").filter(resultado_final__in=("PROMOVIDO","NO_PROMOVIDO","EGRESADO"))
+    filas=[]
+    for r in resultados:
+        orden=r.inscripcion.grado.orden+(1 if r.resultado_final=="PROMOVIDO" else 0)
+        grado=destino.grados.filter(orden=orden).first() if r.resultado_final!="EGRESADO" else None
+        existente=Inscripcion.objects.filter(alumno=r.alumno,ciclo=destino,estado="ACTIVA").first()
+        filas.append({"resultado":r,"grado":grado,"secciones":destino.secciones.filter(grado=grado,activa=True).annotate(ocupados=Count("inscripciones",filter=Q(inscripciones__estado="ACTIVA"))) if grado else [],"existente":existente})
+    sus=suscripcion_actual(request.institucion);usados=Inscripcion.objects.filter(institucion=request.institucion,ciclo=destino,estado="ACTIVA").count()
+    return {"destino":destino,"origen":origen,"filas":filas,"elegibles":sum(1 for x in filas if x["grado"]),"egresados":sum(1 for x in filas if not x["grado"]),"ya_inscritos":sum(1 for x in filas if x["existente"]),"suscripcion":sus,"usados":usados}
+
+@gestion_alumnos_required
+def reinscripciones_detalle(request,ciclo_destino):
+    destino=get_object_or_404(CicloEscolar,institucion=request.institucion,pk=ciclo_destino,cerrado=False)
+    return render(request,"alumnos/reinscripciones.html",_reinscripciones_contexto(request,destino))
+
+@gestion_alumnos_required
+@require_POST
+def reinscripciones_procesar(request,ciclo_destino):
+    destino=get_object_or_404(CicloEscolar,institucion=request.institucion,pk=ciclo_destino,cerrado=False)
+    asignaciones=[]
+    for rid in request.POST.getlist("resultado"):
+        resultado=get_object_or_404(ResultadoAnualAlumno,institucion=request.institucion,pk=rid)
+        seccion=get_object_or_404(Seccion,institucion=request.institucion,ciclo=destino,pk=request.POST.get(f"seccion_{rid}"))
+        asignaciones.append((resultado,destino,seccion))
+    try: procesadas=reinscripcion_masiva(asignaciones=asignaciones)
+    except ValidationError as exc: messages.error(request,"; ".join(exc.messages))
+    else:
+        creadas=sum(1 for _,creada in procesadas if creada);omitidas=len(procesadas)-creadas
+        registrar_evento(request,"REINSCRIPCION_MASIVA",destino,{"ciclo_destino":destino.anio,"alumnos":creadas})
+        messages.success(request,f"Reinscripción completada: {creadas} creadas, {omitidas} ya existentes.")
+    return redirect("alumnos:reinscripciones_detalle",ciclo_destino=destino.pk)
 
 @gestion_alumnos_required
 def editar(request,pk):

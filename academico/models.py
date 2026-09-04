@@ -4,6 +4,11 @@ from django.db.models import Q
 
 
 class CicloEscolar(models.Model):
+    class Estado(models.TextChoices):
+        PLANIFICACION = "PLANIFICACION", "Planificación"
+        ACTIVO = "ACTIVO", "Activo"
+        EN_CIERRE = "EN_CIERRE", "En cierre"
+        CERRADO = "CERRADO", "Cerrado"
     institucion = models.ForeignKey("instituciones.Institucion", on_delete=models.CASCADE, related_name="ciclos_escolares")
     nombre = models.CharField(max_length=120)
     anio = models.PositiveSmallIntegerField()
@@ -12,6 +17,7 @@ class CicloEscolar(models.Model):
     activo = models.BooleanField(default=True)
     es_actual = models.BooleanField(default=False)
     cerrado = models.BooleanField(default=False)
+    estado = models.CharField(max_length=14, choices=Estado.choices, default=Estado.PLANIFICACION)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
@@ -28,6 +34,8 @@ class CicloEscolar(models.Model):
             raise ValidationError({"fecha_fin": "La fecha final debe ser posterior a la fecha inicial."})
 
     def save(self, *args, **kwargs):
+        if self.cerrado:
+            self.estado = self.Estado.CERRADO
         with transaction.atomic():
             if self.es_actual and self.institucion_id:
                 from instituciones.models import Institucion
@@ -38,6 +46,53 @@ class CicloEscolar(models.Model):
 
     def __str__(self):
         return self.nombre
+
+
+class ResultadoAnualAlumno(models.Model):
+    class Resultado(models.TextChoices):
+        PROMOVIDO = "PROMOVIDO", "Promovido"
+        NO_PROMOVIDO = "NO_PROMOVIDO", "No promovido"
+        RETIRADO = "RETIRADO", "Retirado"
+        TRASLADADO = "TRASLADADO", "Trasladado"
+        PENDIENTE = "PENDIENTE", "Pendiente"
+        NO_APLICA = "NO_APLICA", "No aplica"
+        EGRESADO = "EGRESADO", "Egresado"
+
+    institucion = models.ForeignKey("instituciones.Institucion", on_delete=models.CASCADE, related_name="resultados_anuales")
+    ciclo = models.ForeignKey(CicloEscolar, on_delete=models.PROTECT, related_name="resultados_anuales")
+    alumno = models.ForeignKey("alumnos.Alumno", on_delete=models.PROTECT, related_name="resultados_anuales")
+    inscripcion = models.OneToOneField("alumnos.Inscripcion", on_delete=models.PROTECT, related_name="resultado_anual")
+    promedio_final = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    resultado_sugerido = models.CharField(max_length=14, choices=Resultado.choices, default=Resultado.PENDIENTE)
+    resultado_final = models.CharField(max_length=14, choices=Resultado.choices, null=True, blank=True)
+    observaciones = models.TextField(blank=True)
+    generado_automaticamente = models.BooleanField(default=True)
+    confirmado_por = models.ForeignKey("cuentas.Usuario", null=True, blank=True, on_delete=models.SET_NULL, related_name="resultados_anuales_confirmados")
+    fecha_confirmacion = models.DateTimeField(null=True, blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("ciclo__anio", "alumno__primer_apellido")
+        constraints = [models.UniqueConstraint(fields=("institucion", "ciclo", "alumno"), name="resultado_anual_unico_alumno_ciclo")]
+        indexes = [models.Index(fields=("institucion", "ciclo", "resultado_final"), name="resultado_anual_filtro_idx")]
+
+    @property
+    def confirmado(self):
+        return bool(self.resultado_final and self.fecha_confirmacion)
+
+    def clean(self):
+        errors = {}
+        if self.ciclo_id and self.ciclo.institucion_id != self.institucion_id:
+            errors["ciclo"] = "El ciclo no pertenece a la institución."
+        if self.inscripcion_id and (self.inscripcion.institucion_id != self.institucion_id or self.inscripcion.ciclo_id != self.ciclo_id or self.inscripcion.alumno_id != self.alumno_id):
+            errors["inscripcion"] = "La inscripción no corresponde al alumno, ciclo e institución."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class JornadaInstitucion(models.Model):

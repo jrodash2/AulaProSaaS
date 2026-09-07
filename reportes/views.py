@@ -22,9 +22,39 @@ def dashboard(request):
 @reporte_required("alumnos")
 def alumnos(request):
  ciclo,ctx=_base(request);qs=salumnos.queryset(request.institucion,ciclo,request.GET);ctx.update(salumnos.estadisticas(request.institucion,qs));ctx["filas"]=_page(request,salumnos.filas(qs,ciclo));ctx["inscripciones"]=_page(request,salumnos.inscripciones(request.institucion,ciclo,request.GET));return render(request,"reportes/alumnos.html",ctx)
+@reporte_required("alumnos")
+def expedientes(request):
+ from alumnos.models import Alumno,DocumentoAlumno
+ from alumnos.services import resumen_expediente
+ from suscripciones.services import modulo_habilitado
+ if not modulo_habilitado(request.institucion,"EXPEDIENTE"):raise __import__('django.core.exceptions',fromlist=['PermissionDenied']).PermissionDenied
+ ciclo,ctx=_base(request);rows=[]
+ for alumno in Alumno.objects.filter(institucion=request.institucion):rows.append((alumno,resumen_expediente(alumno)))
+ ctx["filas"]=rows;ctx["completos"]=sum(r["completo"] for _,r in rows);ctx["incompletos"]=len(rows)-ctx["completos"];ctx["pendientes"]=sum(r["pendientes"] for _,r in rows);ctx["rechazados"]=DocumentoAlumno.objects.filter(institucion=request.institucion,estado="RECHAZADO").count();ctx["vencidos"]=sum(1 for d in DocumentoAlumno.objects.filter(institucion=request.institucion,estado="APROBADO") if d.estado_vigente=="VENCIDO");return render(request,"reportes/expedientes.html",ctx)
+@reporte_required("alumnos")
+def exportar_expedientes(request):
+ from alumnos.models import Alumno
+ from alumnos.services import resumen_expediente
+ data=[]
+ for a in Alumno.objects.filter(institucion=request.institucion):
+  r=resumen_expediente(a);i=a.inscripciones.filter(estado="ACTIVA").select_related("grado","seccion").first();data.append((a.nombre_completo,a.cui or "",i.grado.nombre if i else "",i.seccion.nombre if i else "",r["porcentaje"],r["pendientes"],r["rechazados"]))
+ return excel_response(institucion=request.institucion,titulo="Expedientes documentales",encabezados=("Alumno","CUI","Grado","Sección","Completitud","Pendientes","Rechazados"),filas=data,nombre="expedientes_aulapro.xlsx",filtros=request.GET.urlencode())
 @reporte_required("academico")
 def academico(request):
  ciclo,ctx=_base(request);ctx.update(sacademico.datos(request.institucion,ciclo) if ciclo else {});return render(request,"reportes/academico.html",ctx)
+def _resultados(request,ciclo):
+ from academico.models import ResultadoAnualAlumno
+ qs=ResultadoAnualAlumno.objects.filter(institucion=request.institucion,ciclo=ciclo,resultado_final__isnull=False).select_related("alumno","inscripcion__grado","inscripcion__seccion")
+ for key,lookup in (("oferta","inscripcion__oferta_academica_id"),("grado","inscripcion__grado_id"),("seccion","inscripcion__seccion_id"),("resultado","resultado_final")):
+  if request.GET.get(key):qs=qs.filter(**{lookup:request.GET[key]})
+ return qs
+@reporte_required("academico")
+def resultados_anuales(request):
+ ciclo,ctx=_base(request);ctx["resultados"]=_page(request,_resultados(request,ciclo));ctx["opciones"]=__import__("academico.models",fromlist=["ResultadoAnualAlumno"]).ResultadoAnualAlumno.Resultado.choices;return render(request,"reportes/resultados_anuales.html",ctx)
+@reporte_required("academico")
+def exportar_resultados_anuales(request):
+ ciclo,_=_base(request);data=[(r.alumno.nombre_completo,r.alumno.cui or "",r.inscripcion.grado.nombre,r.inscripcion.seccion.nombre,r.promedio_final,r.get_resultado_final_display()) for r in _resultados(request,ciclo)]
+ return excel_response(institucion=request.institucion,titulo="Resultados anuales",encabezados=("Alumno","CUI","Grado","Sección","Promedio","Resultado"),filas=data,nombre=f"resultados_anuales_{ciclo.anio}.xlsx",ciclo=ciclo,filtros=request.GET.urlencode())
 @reporte_required("asistencia")
 def asistencia(request):
  ciclo,ctx=_base(request);qs=sasistencia.registros(request.institucion,ciclo,request.GET,_asigs(request,ciclo));umbral=int(request.GET.get("umbral","80")) if request.GET.get("umbral","80").isdigit() else 80;umbral=max(0,min(100,umbral));ctx.update(sasistencia.resumen(qs));ctx["filas"]=_page(request,sasistencia.por_alumno(qs,umbral));ctx["umbral"]=umbral;return render(request,"reportes/asistencia.html",ctx)
@@ -55,3 +85,70 @@ def exportar_asistencia(request):
 def exportar_finanzas(request):
  _,_= _base(request);d=sfinanzas.datos(request.institucion,request.GET);rows=[(c.alumno.nombre_completo,c.descripcion,c.monto_total,c.pagado_calc,c.saldo_calc,c.vencido_calc,c.dias_vencido) for c in d["cargos"]]
  return excel_response(institucion=request.institucion,titulo="Cuentas por cobrar",encabezados=("Alumno","Concepto","Cargo","Pagado","Saldo","Saldo vencido","Días vencido"),filas=rows,nombre=f"aulapro_morosidad_{timezone.localdate()}.xlsx",filtros=request.GET.urlencode())
+
+@reporte_required("academico")
+def horarios(request):
+ from django.core.exceptions import PermissionDenied
+ from academico.models import Seccion
+ from horarios.services import validar_carga_semanal
+ from suscripciones.services import modulo_habilitado
+ if not modulo_habilitado(request.institucion,"HORARIOS"):raise PermissionDenied
+ ciclo,ctx=_base(request);filas=[]
+ for seccion in Seccion.objects.filter(institucion=request.institucion,ciclo=ciclo,activa=True).select_related("grado","jornada"):
+  carga=validar_carga_semanal(seccion);filas.append({"seccion":seccion,"carga":carga,"completa":bool(carga) and all(not x["faltan"] and not x["exceso"] for x in carga)})
+ ctx["filas"]=filas;ctx["completas"]=sum(f["completa"] for f in filas);ctx["incompletas"]=len(filas)-ctx["completas"]
+ return render(request,"reportes/horarios.html",ctx)
+
+@reporte_required("academico")
+def seguimiento(request):
+ from django.core.exceptions import PermissionDenied
+ from seguimiento.models import RegistroSeguimiento,CompromisoSeguimiento
+ from suscripciones.services import modulo_habilitado
+ if not modulo_habilitado(request.institucion,"SEGUIMIENTO"):raise PermissionDenied
+ ciclo,ctx=_base(request);q=RegistroSeguimiento.objects.filter(institucion=request.institucion,ciclo=ciclo).select_related("alumno","inscripcion__grado","inscripcion__seccion","categoria")
+ for k in ("categoria","tipo","estado"):
+  if request.GET.get(k):q=q.filter(**{f"{k}_id" if k=="categoria" else k:request.GET[k]})
+ ctx.update({"items":_page(request,q),"registros":q.count(),"abiertos":q.filter(estado__in=("ABIERTO","EN_SEGUIMIENTO")).count(),"resueltos":q.filter(estado__in=("RESUELTO","CERRADO")).count(),"reconocimientos":q.filter(tipo="POSITIVO").count(),"compromisos":CompromisoSeguimiento.objects.filter(registro__in=q,estado="PENDIENTE").count()});return render(request,"reportes/seguimiento.html",ctx)
+@reporte_required("academico")
+def exportar_seguimiento(request):
+ from seguimiento.models import RegistroSeguimiento
+ q=RegistroSeguimiento.objects.filter(institucion=request.institucion).select_related("alumno","inscripcion__grado","inscripcion__seccion","categoria")
+ rows=[(r.alumno.nombre_completo,r.inscripcion.grado.nombre,r.inscripcion.seccion.nombre,r.fecha,r.get_tipo_display(),r.categoria.nombre,r.get_estado_display(),r.get_gravedad_display()) for r in q]
+ return excel_response(institucion=request.institucion,titulo="Seguimiento estudiantil",encabezados=("Alumno","Grado","Sección","Fecha","Tipo","Categoría","Estado","Gravedad"),filas=rows,nombre="seguimiento_aulapro.xlsx",filtros=request.GET.urlencode())
+
+@reporte_required("academico")
+def admisiones(request):
+ from admisiones.models import SolicitudAdmision
+ from suscripciones.services import modulo_habilitado
+ from django.core.exceptions import PermissionDenied
+ if not modulo_habilitado(request.institucion,"ADMISIONES"):raise PermissionDenied
+ q=SolicitudAdmision.objects.filter(institucion=request.institucion).select_related("aspirante","ciclo_solicitado","grado_solicitado")
+ for k in ("estado","origen"):
+  if request.GET.get(k):q=q.filter(**{k:request.GET[k]})
+ total=q.exclude(estado="CANCELADA").count();ins=q.filter(estado="INSCRITA").count();return render(request,"reportes/admisiones.html",{"items":_page(request,q),"total":total,"proceso":q.exclude(estado__in=("APROBADA","INSCRITA","RECHAZADA","CANCELADA")).count(),"aprobadas":q.filter(estado="APROBADA").count(),"inscritas":ins,"espera":q.filter(estado="LISTA_ESPERA").count(),"rechazadas":q.filter(estado="RECHAZADA").count(),"conversion":round(ins*100/total,1) if total else 0})
+@reporte_required("academico")
+def exportar_admisiones(request):
+ from admisiones.models import SolicitudAdmision
+ q=SolicitudAdmision.objects.filter(institucion=request.institucion).select_related("aspirante","ciclo_solicitado","oferta_solicitada","grado_solicitado").prefetch_related("aspirante__encargados")
+ rows=[]
+ for s in q:
+  e=s.aspirante.encargados.order_by("-es_principal").first();rows.append((s.numero_solicitud,s.aspirante.nombre_completo,s.aspirante.cui or "",s.ciclo_solicitado.nombre,s.oferta_solicitada.nombre_mostrado,s.grado_solicitado.nombre,s.get_estado_display(),s.fecha_solicitud,s.get_origen_display(),f"{e.nombres} {e.apellidos}" if e else "",e.telefono if e else "",e.correo if e else ""))
+ return excel_response(institucion=request.institucion,titulo="Admisiones",encabezados=("Número","Aspirante","CUI","Ciclo","Oferta","Grado","Estado","Fecha","Origen","Encargado","Teléfono","Correo"),filas=rows,nombre="admisiones_aulapro.xlsx",filtros=request.GET.urlencode())
+
+@reporte_required("docentes")
+def rrhh(request):
+ from django.core.exceptions import PermissionDenied
+ from rrhh.models import Empleado,ContratoLaboral,PermisoLaboral
+ from rrhh.services import contratos_por_vencer
+ from suscripciones.services import modulo_habilitado
+ if not modulo_habilitado(request.institucion,"RRHH"):raise PermissionDenied
+ q=Empleado.objects.filter(institucion=request.institucion).select_related("puesto","area")
+ for k in ("estado","area","puesto"):
+  if request.GET.get(k):q=q.filter(**{f"{k}_id" if k in ("area","puesto") else k:request.GET[k]})
+ return render(request,"reportes/rrhh.html",{"items":_page(request,q),"activos":q.filter(estado="ACTIVO").count(),"por_vencer":contratos_por_vencer(request.institucion).count(),"vencidos":ContratoLaboral.objects.filter(institucion=request.institucion,estado="VENCIDO").count(),"permisos":PermisoLaboral.objects.filter(institucion=request.institucion,estado="PENDIENTE").count()})
+@reporte_required("docentes")
+def exportar_rrhh(request):
+ from rrhh.models import Empleado
+ q=Empleado.objects.filter(institucion=request.institucion).select_related("puesto","area").prefetch_related("contratos")
+ rows=[(e.codigo_empleado,e.nombre_completo,e.puesto.nombre,e.area.nombre,e.fecha_ingreso,e.get_estado_display(),next((c.numero_contrato for c in e.contratos.all() if c.estado=="VIGENTE"),"")) for e in q]
+ return excel_response(institucion=request.institucion,titulo="Recursos Humanos",encabezados=("Código","Nombre","Puesto","Área","Fecha ingreso","Estado","Contrato"),filas=rows,nombre="rrhh_aulapro.xlsx",filtros=request.GET.urlencode())

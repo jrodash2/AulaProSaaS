@@ -1,0 +1,1 @@
+{% extends 'base_public.html' %}{% block content %}<main class="public-admission"><section class="panel text-center"><h1>Tu solicitud fue recibida correctamente.</h1><strong>{{ numero }}</strong><p>Guarda este número para futuras consultas.</p><a class="btn btn-primary" href="{% url 'admisiones:portal' token %}">Consultar estado</a></section></main>{% endblock %}

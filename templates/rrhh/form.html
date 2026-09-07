@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<div class="page-heading"><h1>{{ titulo }}</h1></div><form method="post" {% if multipart %}enctype="multipart/form-data"{% endif %} class="panel">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary">Guardar</button></form>{% endblock %}

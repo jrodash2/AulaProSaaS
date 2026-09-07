@@ -1,4 +1,5 @@
 def aulapro_context(request):
+    from django.conf import settings
     from suscripciones.models import ModuloSaaS
     modulos = {codigo: True for codigo, _ in ModuloSaaS.Codigo.choices}
     if getattr(request, "institucion", None) and request.user.is_authenticated:
@@ -12,4 +13,6 @@ def aulapro_context(request):
         "es_superadministrador": request.user.is_authenticated and request.user.is_superuser,
         "modulos_saas": modulos,
         "suscripcion_actual": getattr(request, "suscripcion_actual", None),
+        "static_asset_version": settings.STATIC_ASSET_VERSION,
+        "es_entorno_demo": getattr(getattr(request, "institucion", None), "codigo", None) == "AULAPRO-DEMO",
     }

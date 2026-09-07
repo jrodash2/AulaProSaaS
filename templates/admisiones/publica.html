@@ -1,0 +1,1 @@
+{% extends 'base_public.html' %}{% block content %}<main class="public-admission"><header><h1>{{ config.titulo_publico }}</h1><p>{{ institucion.nombre }}</p><p>{{ config.mensaje_publico }}</p></header><form method="post" class="panel">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary w-100">Enviar solicitud</button></form></main>{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Centro de Demostración · AulaPro{% endblock %}
+{% block breadcrumb %}Centro de Demostración{% endblock %}
+{% block content %}
+<header class="demo-hero">
+  <div>
+    <span class="badge rounded-pill text-bg-primary mb-3">ENTORNO DEMO</span>
+    <h1>Centro de Demostración AulaPro</h1>
+    <p>Explora las principales funcionalidades del sistema utilizando datos preparados especialmente para demostración.</p>
+  </div>
+  <i class="bi bi-play-circle" aria-hidden="true"></i>
+</header>
+
+<section class="panel demo-section">
+  <div class="section-heading"><div><p class="eyebrow">Accesos</p><h2>Usuarios para probar</h2></div></div>
+  <div class="demo-password"><span>Contraseña común</span><code id="demoPassword">{{ demo_password_display }}</code><button type="button" class="btn btn-sm btn-outline-primary copy-demo" data-copy="{{ demo_password_display }}" aria-label="Copiar contraseña demo"><i class="bi bi-copy" aria-hidden="true"></i> Copiar</button></div>
+  <div class="demo-users">
+    {% for rol, username in demo_usuarios %}<article class="demo-user-card"><span>{{ rol }}</span><strong>{{ username }}</strong><button type="button" class="btn btn-sm btn-light copy-demo" data-copy="{{ username }}" aria-label="Copiar usuario {{ username }}"><i class="bi bi-copy" aria-hidden="true"></i> Copiar</button></article>{% endfor %}
+  </div>
+  <p class="small text-muted mt-3 mb-0"><i class="bi bi-shield-lock" aria-hidden="true"></i> Estas credenciales pertenecen exclusivamente al entorno de demostración. No se realiza suplantación automática.</p>
+</section>
+
+<section class="demo-section">
+  <div class="section-heading"><div><p class="eyebrow">Datos y procesos</p><h2>Qué puedes probar</h2><p>Las cifras se calculan desde la institución demo. Los accesos respetan tu rol y los módulos de su plan.</p></div></div>
+  <div class="demo-module-grid">
+    {% for card in demo_cards %}
+      <article data-module="{{ card.codigo }}" class="demo-module-card demo-tone-{{ forloop.counter|divisibleby:4|yesno:'four,base' }}">
+        <div class="demo-module-head"><span class="module-icon primary"><i class="bi {{ card.icono }}" aria-hidden="true"></i></span><div><span class="eyebrow">{{ card.codigo }}</span><h3>{{ card.nombre }}</h3></div></div>
+        <p>{{ card.descripcion }}</p>
+        <div class="demo-metrics">
+          {% for label, value in card.metricas.items %}<span><small>{{ label|capfirst }}</small><strong>{% if label == 'saldo' %}Q {{ value|floatformat:2 }}{% else %}{{ value }}{% endif %}</strong></span>{% empty %}<p class="text-muted">No hay datos demo generados todavía.</p>{% endfor %}
+        </div>
+        <h4>Procesos recomendados</h4><ul>{% for proceso in card.procesos %}<li>{{ proceso }}</li>{% endfor %}</ul>
+        <div class="mt-auto">{% if card.url %}<a class="btn btn-primary btn-sm" href="{{ card.url }}">Ir a probar <i class="bi bi-arrow-right" aria-hidden="true"></i></a>{% elif card.nombre == 'Portal Padre' %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm">Cerrar sesión e ingresar como padre</button></form>{% elif card.nombre == 'Portal Alumno' %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm">Cerrar sesión e ingresar como alumno</button></form>{% else %}<span class="badge text-bg-secondary">No disponible para este rol</span>{% endif %}</div>
+      </article>
+    {% empty %}<div class="panel"><p>No hay datos demo generados todavía.</p></div>{% endfor %}
+  </div>
+</section>
+
+<section class="panel demo-section">
+  <div class="section-heading"><div><p class="eyebrow">Guías paso a paso</p><h2>Recorridos recomendados</h2></div></div>
+  <div class="demo-journeys">
+    <article><span>01</span><h3>Nueva admisión</h3><p>Solicitudes → documentos → entrevista → evaluación → aprobación → conversión.</p></article>
+    <article><span>02</span><h3>Vida académica</h3><p>Alumno → inscripción → asistencia → tareas → notas → horario → seguimiento.</p></article>
+    <article><span>03</span><h3>Finanzas</h3><p>Alumno → cargos → pago parcial → saldo → reporte financiero.</p></article>
+    <article><span>04</span><h3>Cierre anual</h3><p>Resultados → confirmación → cierre → siguiente ciclo → reinscripción.</p></article>
+    <article><span>05</span><h3>Recursos Humanos</h3><p>Empleado → contrato → expediente → permiso → historial laboral.</p></article>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}<script>
+document.querySelectorAll('.copy-demo').forEach((button) => button.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(button.dataset.copy);
+  const original = button.innerHTML;
+  button.innerHTML = '<i class="bi bi-check" aria-hidden="true"></i> Copiado';
+  window.setTimeout(() => { button.innerHTML = original; }, 1400);
+}));
+</script>{% endblock %}

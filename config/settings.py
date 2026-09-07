@@ -1,5 +1,4 @@
 import os
-import urllib.parse
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -55,6 +54,10 @@ INSTALLED_APPS = [
     "comunicaciones",
     "reportes",
     "suscripciones",
+    "horarios",
+    "seguimiento",
+    "admisiones",
+    "rrhh",
 ]
 
 MIDDLEWARE = [
@@ -92,57 +95,18 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
-DB_NAME = os.getenv("DB_NAME", "").strip()
-
-if DATABASE_URL:
-    parsed = urllib.parse.urlparse(DATABASE_URL)
-    db_options = {}
-    if os.getenv("DB_SSLMODE"):
-        db_options["sslmode"] = os.getenv("DB_SSLMODE")
-
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": parsed.path.lstrip("/"),
-            "USER": parsed.username,
-            "PASSWORD": parsed.password,
-            "HOST": parsed.hostname,
-            "PORT": parsed.port or 5432,
-            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60" if not DEBUG else "0")),
-            "OPTIONS": db_options,
-        }
+# Configuración PostgreSQL local.
+# Para producción mover credenciales a variables de entorno.
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "aulapro",
+        "USER": "postgres",
+        "PASSWORD": "Jrodash2*",
+        "HOST": "localhost",
+        "PORT": "5432",
     }
-elif DB_NAME:
-    if not DEBUG:
-        faltantes = [name for name in ("DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT") if not os.getenv(name, "").strip()]
-        if faltantes:
-            raise RuntimeError("Variables PostgreSQL requeridas ausentes: " + ", ".join(faltantes))
-    db_options = {}
-    if os.getenv("DB_SSLMODE"):
-        db_options["sslmode"] = os.getenv("DB_SSLMODE")
-
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": DB_NAME,
-            "USER": os.getenv("DB_USER", ""),
-            "PASSWORD": os.getenv("DB_PASSWORD", ""),
-            "HOST": os.getenv("DB_HOST", "localhost"),
-            "PORT": os.getenv("DB_PORT", "5432"),
-            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60" if not DEBUG else "0")),
-            "OPTIONS": db_options,
-        }
-    }
-else:
-    if not DEBUG:
-        raise RuntimeError("Configure DATABASE_URL o DB_NAME/DB_USER/DB_PASSWORD para producción.")
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -157,6 +121,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "/static/"
+STATIC_ASSET_VERSION = os.getenv("STATIC_ASSET_VERSION", "20260828.1")
+DEMO_PASSWORD_DISPLAY = os.getenv("DEMO_PASSWORD_DISPLAY", "AulaProDemo2026!")
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 

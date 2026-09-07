@@ -32,6 +32,10 @@ urlpatterns = [
     path("portal/", include("portal.urls")),
     path("comunicacion/", include("comunicaciones.urls")),
     path("reportes/", include("reportes.urls")),
+    path("horarios/", include("horarios.urls")),
+    path("seguimiento/", include("seguimiento.urls")),
+    path("admisiones/", include("admisiones.urls")),
+    path("rrhh/", include("rrhh.urls")),
     path("saas/", include("suscripciones.urls")),
     path("institucion/suscripcion/", include("suscripciones.urls_institucion")),
 ]

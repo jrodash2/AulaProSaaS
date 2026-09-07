@@ -16,9 +16,10 @@ from tareas.tests import Base
 
 
 class CatalogoModulosTests(TestCase):
-    def test_migracion_crea_diez_modulos(self):
-        self.assertEqual(ModuloSaaS.objects.filter(codigo__in=[c for c, _ in ModuloSaaS.Codigo.choices]).count(), 10)
-        self.assertEqual(list(ModuloSaaS.objects.order_by("orden").values_list("orden", flat=True)), list(range(1, 11)))
+    def test_migracion_crea_catalogo_oficial_completo(self):
+        total=len(ModuloSaaS.Codigo.choices)
+        self.assertEqual(ModuloSaaS.objects.filter(codigo__in=[c for c, _ in ModuloSaaS.Codigo.choices]).count(), total)
+        self.assertEqual(list(ModuloSaaS.objects.order_by("orden").values_list("orden", flat=True)), list(range(1, total+1)))
 
     def test_comando_sincronizar_idempotente_y_preserva_inactivo(self):
         modulo=ModuloSaaS.objects.get(codigo="FINANZAS");modulo.activo=False;modulo.nombre="Viejo";modulo.save()
@@ -32,7 +33,7 @@ class CatalogoModulosTests(TestCase):
         data=QueryDict(mutable=True);data.update({"codigo":"NUEVO","nombre":"Nuevo","descripcion":"x","precio_mensual":"99.00","precio_anual":"999.00","max_alumnos":100,"max_usuarios":10,"orden":1,"activo":"on","publico":"on"});data.setlist("modulos_seleccionados",[str(m.pk) for m in modulos]);return data
 
     def test_plan_form_muestra_modulos_activos(self):
-        form=PlanForm();self.assertEqual(len(form.modulos_disponibles),10)
+        form=PlanForm();self.assertEqual(len(form.modulos_disponibles),len(ModuloSaaS.Codigo.choices))
 
     def test_guardar_y_desmarcar_plan_modulo(self):
         mods=list(ModuloSaaS.objects.order_by("orden")[:3]);form=PlanForm(self.datos_plan(mods));self.assertTrue(form.is_valid(),form.errors);plan=form.save();self.assertEqual(plan.configuracion_modulos.filter(habilitado=True).count(),3)

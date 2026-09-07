@@ -2,6 +2,7 @@ from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.http import JsonResponse
 
@@ -9,8 +10,16 @@ from auditoria.services import registrar_evento
 from core.decorators import administrador_institucion_required, institucion_required
 
 from .forms import CicloEscolarForm, CursoInstitucionForm, JornadaForm, OfertaPensumForm, SeccionForm
-from .models import CicloEscolar, CursoInstitucion, GradoInstitucion, JornadaInstitucion, OfertaAcademica, Seccion
-from .services import crear_oferta_desde_pensum, establecer_ciclo_actual
+from .models import CicloEscolar, CursoInstitucion, GradoInstitucion, JornadaInstitucion, OfertaAcademica, ResultadoAnualAlumno, Seccion
+from .services import (cerrar_ciclo, confirmar_resultado, crear_ciclo_siguiente, crear_oferta_desde_pensum,
+                       establecer_ciclo_actual, generar_resultado_anual, validar_cierre)
+
+CIERRE_ROLES = {"PROPIETARIO", "DIRECTOR"}
+RESULTADOS_ROLES = CIERRE_ROLES | {"ADMINISTRADOR"}
+
+def _exigir_rol(request, permitidos):
+    if request.asignacion_institucion.rol not in permitidos:
+        raise PermissionDenied
 
 
 def _ciclos(request):
@@ -66,8 +75,131 @@ def ciclo_detalle(request, pk):
         "total_grados": ciclo.grados.filter(institucion=request.institucion).count(),
         "total_secciones": Seccion.objects.filter(institucion=request.institucion, ciclo=ciclo).count(),
         "total_inscripciones": Inscripcion.objects.filter(institucion=request.institucion, ciclo=ciclo).count(),
+        "total_periodos": ciclo.periodos_academicos.count(),
+        "total_resultados": ciclo.resultados_anuales.count(),
+        "resultados_confirmados": ciclo.resultados_anuales.filter(resultado_final__isnull=False).count(),
         "actividad": EventoAuditoria.objects.filter(institucion=request.institucion, modelo=ciclo._meta.label, objeto_id=str(ciclo.pk))[:10],
     })
+
+
+@institucion_required
+def ciclo_cierre(request, pk):
+    ciclo = get_object_or_404(_ciclos(request), pk=pk)
+    _exigir_rol(request, RESULTADOS_ROLES)
+    return render(request, "academico/cierre_wizard.html", {
+        "ciclo": ciclo, "validacion": validar_cierre(ciclo),
+        "activas": ciclo.inscripciones.filter(estado="ACTIVA").count(),
+        "generados": ciclo.resultados_anuales.count(),
+        "confirmados": ciclo.resultados_anuales.filter(resultado_final__isnull=False).count(),
+    })
+
+
+@institucion_required
+@require_POST
+def ciclo_iniciar_cierre(request, pk):
+    ciclo = get_object_or_404(_ciclos(request), pk=pk)
+    _exigir_rol(request, CIERRE_ROLES)
+    if ciclo.cerrado:
+        raise ValidationError("El ciclo ya está cerrado.")
+    ciclo.estado = CicloEscolar.Estado.EN_CIERRE
+    ciclo.save(update_fields=("estado", "fecha_actualizacion"))
+    registrar_evento(request, "INICIAR_CIERRE_CICLO", ciclo)
+    messages.success(request, "Cierre académico iniciado.")
+    return redirect("academico:ciclo_cierre", pk=ciclo.pk)
+
+
+def _resultados_filtrados(request, ciclo):
+    qs = ciclo.resultados_anuales.select_related("alumno", "inscripcion__oferta_academica", "inscripcion__grado", "inscripcion__seccion", "confirmado_por")
+    q = request.GET.get("q", "").strip()
+    if q:
+        qs = qs.filter(Q(alumno__cui__icontains=q) | Q(alumno__primer_nombre__icontains=q) | Q(alumno__primer_apellido__icontains=q))
+    for key, lookup in (("oferta", "inscripcion__oferta_academica_id"), ("grado", "inscripcion__grado_id"), ("seccion", "inscripcion__seccion_id"), ("sugerido", "resultado_sugerido"), ("final", "resultado_final")):
+        if request.GET.get(key): qs = qs.filter(**{lookup: request.GET[key]})
+    if request.GET.get("pendientes") == "1": qs = qs.filter(Q(resultado_final__isnull=True) | Q(resultado_sugerido="PENDIENTE"))
+    return qs
+
+
+@institucion_required
+def resultados_anuales(request, pk):
+    ciclo = get_object_or_404(_ciclos(request), pk=pk)
+    _exigir_rol(request, RESULTADOS_ROLES | {"DOCENTE"})
+    qs = _resultados_filtrados(request, ciclo)
+    conteos = {valor: ciclo.resultados_anuales.filter(resultado_final=valor).count() for valor, _ in ResultadoAnualAlumno.Resultado.choices}
+    return render(request, "academico/resultados_anuales.html", {"ciclo": ciclo, "resultados": qs, "conteos": conteos,
+        "ofertas": ciclo.ofertas.all(), "grados": ciclo.grados.all(), "secciones": ciclo.secciones.all(), "opciones": ResultadoAnualAlumno.Resultado.choices,
+        "puede_editar": request.asignacion_institucion.rol in RESULTADOS_ROLES})
+
+
+@institucion_required
+@require_POST
+def resultados_generar(request, pk):
+    ciclo = get_object_or_404(_ciclos(request), pk=pk, cerrado=False)
+    _exigir_rol(request, RESULTADOS_ROLES)
+    total = 0
+    with transaction.atomic():
+        for inscripcion in ciclo.inscripciones.filter(estado__in=("ACTIVA", "RETIRADA", "TRASLADADA")):
+            generar_resultado_anual(inscripcion); total += 1
+    registrar_evento(request, "GENERAR_RESULTADOS_ANUALES", ciclo, {"alumnos": total})
+    messages.success(request, f"Se generaron o actualizaron {total} resultados.")
+    return redirect("academico:resultados_anuales", pk=ciclo.pk)
+
+
+@institucion_required
+@require_POST
+def resultado_confirmar(request, pk):
+    resultado = get_object_or_404(ResultadoAnualAlumno, pk=pk, institucion=request.institucion)
+    _exigir_rol(request, RESULTADOS_ROLES)
+    try:
+        confirmar_resultado(resultado, request.POST.get("resultado_final"), request.user, request.POST.get("observaciones", ""))
+    except ValidationError as exc: messages.error(request, "; ".join(exc.messages))
+    else:
+        registrar_evento(request, "CONFIRMAR_RESULTADO_ALUMNO", resultado)
+        messages.success(request, "Resultado confirmado.")
+    return redirect("academico:resultados_anuales", pk=resultado.ciclo_id)
+
+
+@institucion_required
+@require_POST
+def resultados_confirmar_sugerencias(request, pk):
+    ciclo = get_object_or_404(_ciclos(request), pk=pk)
+    _exigir_rol(request, RESULTADOS_ROLES)
+    candidatos = ciclo.resultados_anuales.filter(resultado_final__isnull=True).exclude(resultado_sugerido="PENDIENTE")
+    with transaction.atomic():
+        for resultado in candidatos: confirmar_resultado(resultado, resultado.resultado_sugerido, request.user)
+    registrar_evento(request, "CONFIRMAR_RESULTADOS_MASIVO", ciclo, {"alumnos": candidatos.count()})
+    messages.success(request, "Sugerencias válidas confirmadas.")
+    return redirect("academico:resultados_anuales", pk=ciclo.pk)
+
+
+@institucion_required
+@require_POST
+def ciclo_cerrar(request, pk):
+    ciclo = get_object_or_404(_ciclos(request), pk=pk)
+    _exigir_rol(request, CIERRE_ROLES)
+    if request.POST.get("confirmacion", "").strip() != f"CERRAR {ciclo.anio}":
+        messages.error(request, f"Escriba CERRAR {ciclo.anio} para confirmar.")
+        return redirect("academico:ciclo_cierre", pk=pk)
+    try: cerrar_ciclo(ciclo)
+    except ValidationError as exc: messages.error(request, "; ".join(exc.messages)); return redirect("academico:ciclo_cierre", pk=pk)
+    registrar_evento(request, "CERRAR_CICLO", ciclo)
+    messages.success(request, f"Ciclo {ciclo.anio} cerrado correctamente.")
+    return redirect("academico:ciclo_detalle", pk=pk)
+
+
+@institucion_required
+def ciclo_crear_siguiente(request, pk):
+    ciclo = get_object_or_404(_ciclos(request), pk=pk)
+    _exigir_rol(request, CIERRE_ROLES)
+    existente = _ciclos(request).filter(anio=ciclo.anio + 1).first()
+    if request.method == "POST" and not existente:
+        try: existente = crear_ciclo_siguiente(ciclo, anio=ciclo.anio + 1)
+        except ValidationError as exc: messages.error(request, "; ".join(exc.messages))
+        else:
+            registrar_evento(request, "CREAR_CICLO_SIGUIENTE", existente, {"ciclo_origen": ciclo.anio, "ciclo_destino": existente.anio})
+            messages.success(request, f"Ciclo {existente.anio} preparado.")
+            return redirect("academico:ciclo_detalle", pk=existente.pk)
+    return render(request, "academico/crear_ciclo_siguiente.html", {"ciclo": ciclo, "existente": existente,
+        "preview": {"jornadas": request.institucion.jornadas.count(), "ofertas": ciclo.ofertas.count(), "grados": ciclo.grados.count(), "secciones": ciclo.secciones.count(), "cursos": ciclo.cursos.count()}})
 
 
 @administrador_institucion_required

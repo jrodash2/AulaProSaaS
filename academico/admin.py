@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import CicloEscolar, CursoInstitucion, GradoInstitucion, JornadaInstitucion, OfertaAcademica, Seccion
+from .models import CicloEscolar, CursoInstitucion, GradoInstitucion, JornadaInstitucion, OfertaAcademica, ResultadoAnualAlumno, Seccion
 
 
 @admin.register(CicloEscolar)
@@ -24,3 +24,9 @@ class OfertaAcademicaAdmin(admin.ModelAdmin):
 admin.site.register(GradoInstitucion)
 admin.site.register(CursoInstitucion)
 admin.site.register(Seccion)
+
+
+@admin.register(ResultadoAnualAlumno)
+class ResultadoAnualAlumnoAdmin(admin.ModelAdmin):
+    list_display = ("alumno", "ciclo", "promedio_final", "resultado_sugerido", "resultado_final", "fecha_confirmacion")
+    list_filter = ("institucion", "ciclo", "resultado_sugerido", "resultado_final")

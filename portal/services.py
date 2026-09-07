@@ -12,4 +12,5 @@ def resumen_alumno(alumno):
     pendientes=EntregaTarea.objects.filter(alumno=alumno,tarea__in=tareas,estado="PENDIENTE").count()
     cargos=Cargo.objects.filter(alumno=alumno).exclude(estado="ANULADO")
     saldo=sum((c.saldo for c in cargos),Decimal("0"))
-    return {"alumno":alumno,"inscripcion":ins,"asistencia":round(asistencias*100/registros.count(),1) if registros.exists() else None,"tareas_pendientes":pendientes,"saldo":saldo}
+    historial=alumno.inscripciones.select_related("ciclo","grado","seccion").filter(resultado_anual__resultado_final__isnull=False).select_related("resultado_anual")
+    return {"alumno":alumno,"inscripcion":ins,"asistencia":round(asistencias*100/registros.count(),1) if registros.exists() else None,"tareas_pendientes":pendientes,"saldo":saldo,"historial_academico":historial}

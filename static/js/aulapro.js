@@ -23,8 +23,11 @@
   document.getElementById("sidebarBackdrop")?.addEventListener("click", () => shell.classList.remove("sidebar-open"));
   document.getElementById("passwordToggle")?.addEventListener("click", (event) => {
     const input = document.getElementById("id_password");
+    if (!input) return;
     input.type = input.type === "password" ? "text" : "password";
     event.currentTarget.innerHTML = input.type === "password" ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
+    event.currentTarget.setAttribute("aria-label", input.type === "password" ? "Mostrar contraseña" : "Ocultar contraseña");
+    event.currentTarget.setAttribute("aria-pressed", input.type === "text" ? "true" : "false");
   });
 })();
 

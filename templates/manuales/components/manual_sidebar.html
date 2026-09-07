@@ -1,0 +1,4 @@
+<aside class="manual-index" id="manualIndex" aria-label="Contenido del manual">
+  <div class="p-3"><strong>{{ manual.titulo }}</strong></div>
+  <nav>{% for item in manual.secciones %}<a href="{% url 'manuales:seccion' rol_slug item.slug %}" {% if seccion.slug == item.slug %}aria-current="page" class="active"{% endif %}>{{ forloop.counter }}. {{ item.titulo }}</a>{% endfor %}</nav>
+</aside>

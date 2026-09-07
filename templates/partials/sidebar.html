@@ -54,5 +54,9 @@
 {% endif %}      <p class="nav-section nav-label">Sistema</p>
       <a class="nav-item" href="{% url 'instituciones:usuarios' %}"><i class="bi bi-people"></i><span class="nav-label">Usuarios</span></a><a class="nav-item" href="{% url 'instituciones:configuracion' %}"><i class="bi bi-building-gear"></i><span class="nav-label">Configuración</span></a>{% if request.asignacion_institucion.rol == 'PROPIETARIO' or request.asignacion_institucion.rol == 'DIRECTOR' %}<a class="nav-item" href="{% url 'mi_suscripcion:mi_plan' %}"><i class="bi bi-box-seam"></i><span class="nav-label">Plan y suscripción</span></a>{% endif %}
     {% endif %}
+    {% if request.user.is_authenticated %}
+      <p class="nav-section nav-label">Ayuda</p>
+      <a class="nav-item {% if request.resolver_match.app_name == 'manuales' %}active{% endif %}" href="{% url 'manuales:inicio' %}"><i class="bi bi-journal-bookmark" aria-hidden="true"></i><span class="nav-label">Manuales</span></a>
+    {% endif %}
   </nav>
 </aside>

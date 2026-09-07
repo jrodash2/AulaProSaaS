@@ -36,6 +36,7 @@ urlpatterns = [
     path("seguimiento/", include("seguimiento.urls")),
     path("admisiones/", include("admisiones.urls")),
     path("rrhh/", include("rrhh.urls")),
+    path("manuales/", include("manuales.urls")),
     path("saas/", include("suscripciones.urls")),
     path("institucion/suscripcion/", include("suscripciones.urls_institucion")),
 ]

@@ -76,9 +76,23 @@ class DocumentoAlumnoForm(StyledMixin,forms.ModelForm):
         model=DocumentoAlumno;fields=("tipo_documento","inscripcion","ciclo","archivo","numero_documento","fecha_emision","fecha_vencimiento","observaciones","reemplaza_a")
         widgets={"fecha_emision":forms.DateInput(attrs={"type":"date"}),"fecha_vencimiento":forms.DateInput(attrs={"type":"date"}),"reemplaza_a":forms.HiddenInput()}
     def __init__(self,*a,institucion,alumno,portal=False,**kw):
-        super().__init__(*a,**kw);tipos=TipoDocumentoAlumno.objects.filter(institucion=institucion,activo=True)
+        super().__init__(*a,**kw)
+        self.institucion=institucion;self.alumno=alumno
+        self.instance.institucion=institucion;self.instance.alumno=alumno
+        tipos=TipoDocumentoAlumno.objects.filter(institucion=institucion,activo=True)
         if portal:tipos=tipos.filter(visible_portal=True)
-        self.fields["tipo_documento"].queryset=tipos;self.fields["inscripcion"].queryset=alumno.inscripciones.all();self.fields["ciclo"].queryset=CicloEscolar.objects.filter(institucion=institucion);self.fields["reemplaza_a"].queryset=alumno.documentos.all();self.style()
+        self.fields["tipo_documento"].queryset=tipos
+        self.fields["inscripcion"].queryset=Inscripcion.objects.filter(institucion=institucion,alumno=alumno).select_related("ciclo","grado","seccion").order_by("-ciclo__anio","-fecha_inscripcion")
+        self.fields["ciclo"].queryset=CicloEscolar.objects.filter(institucion=institucion).order_by("-anio")
+        self.fields["reemplaza_a"].queryset=DocumentoAlumno.objects.filter(institucion=institucion,alumno=alumno)
+        self.style()
+    def clean(self):
+        data=super().clean();tipo=data.get("tipo_documento");inscripcion=data.get("inscripcion");ciclo=data.get("ciclo");reemplaza=data.get("reemplaza_a")
+        if tipo and tipo.institucion_id!=self.institucion.pk:self.add_error("tipo_documento","El tipo no pertenece a la institución.")
+        if inscripcion and (inscripcion.institucion_id!=self.institucion.pk or inscripcion.alumno_id!=self.alumno.pk):self.add_error("inscripcion","La inscripción no corresponde al alumno.")
+        if ciclo and ciclo.institucion_id!=self.institucion.pk:self.add_error("ciclo","El ciclo no pertenece a la institución.")
+        if reemplaza and (reemplaza.institucion_id!=self.institucion.pk or reemplaza.alumno_id!=self.alumno.pk):self.add_error("reemplaza_a","El documento reemplazado no corresponde al alumno.")
+        return data
     def clean_archivo(self):
         archivo=self.cleaned_data.get("archivo")
         if not archivo:raise forms.ValidationError("Seleccione un archivo.")

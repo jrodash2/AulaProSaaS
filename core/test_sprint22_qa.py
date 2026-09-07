@@ -7,7 +7,7 @@ from django.db import models
 
 from academico.models import ResultadoAnualAlumno
 from admisiones.models import SolicitudAdmision
-from alumnos.models import Alumno, Inscripcion
+from alumnos.models import Alumno, Inscripcion, RequisitoDocumentoAlumno, TipoDocumentoAlumno
 from asistencia.models import RegistroAsistencia, SesionAsistencia
 from calificaciones.models import ActividadEvaluacion, Calificacion
 from docentes.models import AsignacionDocente, Docente
@@ -28,6 +28,8 @@ class DemoPilotoQATests(TestCase):
         cls.primera_ejecucion = cls._conteos(cls.institucion)
         call_command("crear_demo_aulapro", permitir_produccion=True, stdout=output)
         cls.segunda_ejecucion = cls._conteos(cls.institucion)
+        call_command("crear_demo_aulapro", permitir_produccion=True, stdout=output)
+        cls.tercera_ejecucion = cls._conteos(cls.institucion)
 
     @staticmethod
     def _conteos(institucion):
@@ -37,11 +39,14 @@ class DemoPilotoQATests(TestCase):
             RegistroSeguimiento.objects.filter(institucion=institucion).count(),
             SolicitudAdmision.objects.filter(institucion=institucion).count(),
             Empleado.objects.filter(institucion=institucion).count(),
+            TipoDocumentoAlumno.objects.filter(institucion=institucion).count(),
+            RequisitoDocumentoAlumno.objects.filter(institucion=institucion).count(),
         )
 
     def test_demo_completo_es_idempotente(self):
         self.assertEqual(self.segunda_ejecucion, self.primera_ejecucion)
-        self.assertEqual(self.primera_ejecucion, (30, 100, 7, 14, 11))
+        self.assertEqual(self.tercera_ejecucion, self.primera_ejecucion)
+        self.assertEqual(self.primera_ejecucion, (30, 100, 7, 14, 11, 6, 6))
 
     def test_crea_roles_piloto(self):
         usuarios = get_user_model().objects
@@ -175,3 +180,17 @@ class DemoPilotoQATests(TestCase):
         self.assertNotContains(response, "Estás usando el entorno de demostración de AulaPro")
         self.assertNotContains(response, "Guía del Demo")
         self.assertNotContains(response, "AulaProDemo2026!")
+
+    def test_demo_consolida_aliases_documentales_sin_perder_documentos(self):
+        from django.core.management import call_command
+        from alumnos.models import DocumentoAlumno, RequisitoDocumentoAlumno, TipoDocumentoAlumno
+
+        alumno = Alumno.objects.filter(institucion=self.institucion).first()
+        alias = TipoDocumentoAlumno.objects.create(institucion=self.institucion, codigo="FOTO", nombre="Fotografía duplicada")
+        RequisitoDocumentoAlumno.objects.create(institucion=self.institucion, tipo_documento=alias)
+        documento = DocumentoAlumno.objects.create(institucion=self.institucion, alumno=alumno, tipo_documento=alias, estado=DocumentoAlumno.Estado.ENTREGADO, cargado_por=get_user_model().objects.get(username="demo_admin"))
+        call_command("crear_demo_aulapro", permitir_produccion=True, stdout=StringIO())
+        documento.refresh_from_db()
+        self.assertEqual(documento.tipo_documento.codigo, "FOTOGRAFIA")
+        self.assertFalse(TipoDocumentoAlumno.objects.filter(institucion=self.institucion, codigo="FOTO").exists())
+        self.assertEqual(RequisitoDocumentoAlumno.objects.filter(institucion=self.institucion, tipo_documento__codigo="FOTOGRAFIA").count(), 1)

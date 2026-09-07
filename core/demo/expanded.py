@@ -232,8 +232,35 @@ def _finanzas(institucion, ctx, alumnos, inscripciones, familias, admin):
 
 
 def _expediente(institucion, alumnos, inscripciones, admin):
+    # Versiones anteriores usaron códigos distintos para los mismos documentos.
+    # La consolidación está limitada estrictamente al tenant demo y preserva
+    # documentos e historial antes de retirar cada alias.
+    if institucion.codigo == "AULAPRO-DEMO":
+        aliases={
+            "PARTIDA_NACIMIENTO":("PARTIDA_NACIMIENTO","PARTIDA"),
+            "FOTOGRAFIA":("FOTOGRAFIA","FOTO"),
+            "CERTIFICADO_ANTERIOR":("CERTIFICADO_ANTERIOR","CERT"),
+            "DOCUMENTO_ENCARGADO":("DOCUMENTO_ENCARGADO","DOC_ENCARGADO","ENC"),
+            "FORMULARIO_INSCRIPCION":("FORMULARIO_INSCRIPCION","FORM"),
+            "CONSTANCIA_MEDICA":("CONSTANCIA_MEDICA","MED"),
+        }
+        campos_alcance=("aplica_a_nivel_id","aplica_a_oferta_id","aplica_a_grado_id","aplica_a_ciclo_id")
+        for codigo_canonico,codigos in aliases.items():
+            candidatos=list(TipoDocumentoAlumno.objects.filter(institucion=institucion,codigo__in=codigos).order_by("pk"))
+            if not candidatos:continue
+            canonico=next((tipo for tipo in candidatos if tipo.codigo==codigo_canonico),candidatos[0])
+            if canonico.codigo!=codigo_canonico:canonico.codigo=codigo_canonico;canonico.save(update_fields=("codigo","fecha_actualizacion"))
+            for duplicado in candidatos:
+                if duplicado.pk==canonico.pk:continue
+                DocumentoAlumno.objects.filter(institucion=institucion,tipo_documento=duplicado).update(tipo_documento=canonico)
+                for requisito in RequisitoDocumentoAlumno.objects.filter(institucion=institucion,tipo_documento=duplicado):
+                    alcance={campo:getattr(requisito,campo) for campo in campos_alcance}
+                    existente=RequisitoDocumentoAlumno.objects.filter(institucion=institucion,tipo_documento=canonico,**alcance).first()
+                    if existente:requisito.delete()
+                    else:requisito.tipo_documento=canonico;requisito.save(update_fields=("tipo_documento","fecha_actualizacion"))
+                duplicado.delete()
     tipos=[]
-    for orden,(codigo,nombre,vigencia) in enumerate((("PARTIDA","Partida de nacimiento",False),("FOTO","Fotografía",False),("CERT","Certificado grado anterior",False),("ENC","Documento encargado",False),("FORM","Formulario inscripción",False),("MED","Constancia médica",True)),1):
+    for orden,(codigo,nombre,vigencia) in enumerate((("PARTIDA_NACIMIENTO","Partida de nacimiento",False),("FOTOGRAFIA","Fotografía",False),("CERTIFICADO_ANTERIOR","Certificado grado anterior",False),("DOCUMENTO_ENCARGADO","Documento encargado",False),("FORMULARIO_INSCRIPCION","Formulario inscripción",False),("CONSTANCIA_MEDICA","Constancia médica",True)),1):
         tipo,_=TipoDocumentoAlumno.objects.update_or_create(institucion=institucion,codigo=codigo,defaults={"nombre":nombre,"obligatorio":True,"visible_portal":True,"requiere_vigencia":vigencia,"orden":orden,"activo":True})
         RequisitoDocumentoAlumno.objects.update_or_create(institucion=institucion,tipo_documento=tipo,aplica_a_oferta=None,aplica_a_grado=None,defaults={"obligatorio":True,"activo":True})
         tipos.append(tipo)

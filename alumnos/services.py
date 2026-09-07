@@ -124,8 +124,15 @@ def requisitos_aplicables(alumno, inscripcion=None, visible_portal=False):
     inscripcion = inscripcion or alumno.inscripciones.filter(estado="ACTIVA").select_related("ciclo","oferta_academica__nivel","grado").first()
     qs=RequisitoDocumentoAlumno.objects.filter(institucion=alumno.institucion,activo=True,tipo_documento__activo=True).select_related("tipo_documento")
     if visible_portal:qs=qs.filter(tipo_documento__visible_portal=True)
-    if not inscripcion:return qs.filter(aplica_a_nivel__isnull=True,aplica_a_oferta__isnull=True,aplica_a_grado__isnull=True,aplica_a_ciclo__isnull=True)
-    return qs.filter(Q(aplica_a_nivel__isnull=True)|Q(aplica_a_nivel=inscripcion.oferta_academica.nivel),Q(aplica_a_oferta__isnull=True)|Q(aplica_a_oferta=inscripcion.oferta_academica),Q(aplica_a_grado__isnull=True)|Q(aplica_a_grado=inscripcion.grado),Q(aplica_a_ciclo__isnull=True)|Q(aplica_a_ciclo=inscripcion.ciclo)).distinct()
+    if not inscripcion:aplicables=qs.filter(aplica_a_nivel__isnull=True,aplica_a_oferta__isnull=True,aplica_a_grado__isnull=True,aplica_a_ciclo__isnull=True)
+    else:aplicables=qs.filter(Q(aplica_a_nivel__isnull=True)|Q(aplica_a_nivel=inscripcion.oferta_academica.nivel),Q(aplica_a_oferta__isnull=True)|Q(aplica_a_oferta=inscripcion.oferta_academica),Q(aplica_a_grado__isnull=True)|Q(aplica_a_grado=inscripcion.grado),Q(aplica_a_ciclo__isnull=True)|Q(aplica_a_ciclo=inscripcion.ciclo))
+    efectivos={}
+    def especificidad(req):
+        return ((16 if req.aplica_a_grado_id else 0)+(8 if req.aplica_a_oferta_id else 0)+(4 if req.aplica_a_nivel_id else 0)+(2 if req.aplica_a_ciclo_id else 0),-req.pk)
+    for req in aplicables:
+        actual=efectivos.get(req.tipo_documento_id)
+        if actual is None or especificidad(req)>especificidad(actual):efectivos[req.tipo_documento_id]=req
+    return sorted(efectivos.values(),key=lambda req:(req.tipo_documento.orden,req.tipo_documento.nombre,req.pk))
 
 
 def resumen_expediente(alumno, inscripcion=None, visible_portal=False):

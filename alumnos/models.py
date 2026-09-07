@@ -181,6 +181,10 @@ class Inscripcion(models.Model):
         if self.seccion_id and (self.seccion.institucion_id != self.institucion_id or self.seccion.ciclo_id != self.ciclo_id or self.seccion.grado_id != self.grado_id): errors["seccion"]="La sección no corresponde al grado."
         if self.estado == self.Estado.RETIRADA and (not self.fecha_retiro or not self.motivo_retiro): errors["motivo_retiro"]="Indique fecha y motivo del retiro."
         if errors: raise ValidationError(errors)
+    def __str__(self):
+        partes=[str(self.ciclo.anio),self.grado.nombre]
+        if self.seccion_id:partes.append(f"Sección {self.seccion.nombre}")
+        return " · ".join(partes)
     def save(self,*args,**kwargs):
         with transaction.atomic():
             from instituciones.models import Institucion
@@ -287,6 +291,7 @@ class DocumentoAlumno(models.Model):
         if self.tipo_documento_id and self.tipo_documento.institucion_id!=self.institucion_id:e["tipo_documento"]="El tipo no pertenece a la institución."
         if self.inscripcion_id and (self.inscripcion.institucion_id!=self.institucion_id or self.inscripcion.alumno_id!=self.alumno_id):e["inscripcion"]="La inscripción no corresponde al alumno."
         if self.ciclo_id and self.ciclo.institucion_id!=self.institucion_id:e["ciclo"]="El ciclo no pertenece a la institución."
+        if self.reemplaza_a_id and (self.reemplaza_a.institucion_id!=self.institucion_id or self.reemplaza_a.alumno_id!=self.alumno_id):e["reemplaza_a"]="El documento reemplazado no corresponde al alumno."
         if self.estado==self.Estado.RECHAZADO and not self.motivo_rechazo.strip():e["motivo_rechazo"]="Indique el motivo del rechazo."
         if self.estado==self.Estado.NO_APLICA and not self.observaciones.strip():e["observaciones"]="Indique por qué no aplica."
         if e:raise ValidationError(e)

@@ -89,7 +89,13 @@ def expediente_alumno(request,alumno_pk):
 
 @gestion_alumnos_required
 def documento_subir(request,alumno_pk):
-    _expediente_habilitado(request);alumno=get_object_or_404(_alumnos(request),pk=alumno_pk);reemplaza=get_object_or_404(alumno.documentos,pk=request.GET["reemplaza"]) if request.GET.get("reemplaza") else None;form=DocumentoAlumnoForm(request.POST or None,request.FILES or None,institucion=request.institucion,alumno=alumno,initial={"reemplaza_a":reemplaza,"tipo_documento":reemplaza.tipo_documento if reemplaza else None})
+    _expediente_habilitado(request);alumno=get_object_or_404(_alumnos(request),pk=alumno_pk)
+    reemplaza=get_object_or_404(DocumentoAlumno,institucion=request.institucion,alumno=alumno,pk=request.GET["reemplaza"]) if request.GET.get("reemplaza") else None
+    tipo=get_object_or_404(TipoDocumentoAlumno,institucion=request.institucion,activo=True,pk=request.GET["tipo"]) if request.GET.get("tipo") else None
+    inscripcion_actual=Inscripcion.objects.filter(institucion=request.institucion,alumno=alumno,estado=Inscripcion.Estado.ACTIVA).select_related("ciclo").order_by("-ciclo__anio").first()
+    initial={"tipo_documento":tipo,"inscripcion":inscripcion_actual,"ciclo":inscripcion_actual.ciclo if inscripcion_actual else None}
+    if reemplaza:initial.update({"reemplaza_a":reemplaza,"tipo_documento":reemplaza.tipo_documento,"inscripcion":reemplaza.inscripcion or inscripcion_actual,"ciclo":reemplaza.ciclo or (inscripcion_actual.ciclo if inscripcion_actual else None)})
+    form=DocumentoAlumnoForm(request.POST or None,request.FILES or None,institucion=request.institucion,alumno=alumno,initial=initial)
     if request.method=="POST" and form.is_valid():
         doc=form.save(commit=False);doc.institucion=request.institucion;doc.alumno=alumno;doc.cargado_por=request.user;doc.estado=DocumentoAlumno.Estado.ENTREGADO;doc.nombre_original=form.cleaned_data["archivo"].name.replace("\\","/").rsplit("/",1)[-1];doc.save();registrar_evento(request,"REEMPLAZAR_DOCUMENTO_ALUMNO" if doc.reemplaza_a_id else "SUBIR_DOCUMENTO_ALUMNO",doc);messages.success(request,"Documento cargado para revisión.");return redirect("alumnos:expediente_alumno",alumno_pk=alumno.pk)
     return render(request,"alumnos/formulario_simple.html",{"form":form,"titulo":"Subir documento","volver":"alumnos:expediente_alumno","volver_pk":alumno.pk})

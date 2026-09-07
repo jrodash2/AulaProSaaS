@@ -48,3 +48,21 @@ class ExpedienteTests(Base):
   viejo=self.documento(estado='RECHAZADO',motivo_rechazo='Ilegible');nuevo=DocumentoAlumno.objects.create(institucion=self.a,alumno=self.al,tipo_documento=self.tipo,archivo=self.archivo('nuevo.pdf'),reemplaza_a=viejo,cargado_por=self.users['ADMINISTRADOR']);self.assertTrue(DocumentoAlumno.objects.filter(pk=viejo.pk).exists());self.assertEqual(nuevo.reemplaza_a,viejo)
  def test_exportacion_xlsx(self):
   self.client.force_login(self.users['ADMINISTRADOR']);r=self.client.get(reverse('alumnos:expedientes_exportar'));self.assertEqual(r.status_code,200);self.assertIn('spreadsheet',r.headers['Content-Type'])
+
+ def test_subir_documento_no_genera_errores_tenant(self):
+  self.client.force_login(self.users['ADMINISTRADOR']);url=reverse('alumnos:documento_subir',args=[self.al.pk])
+  response=self.client.post(url,{'tipo_documento':self.tipo.pk,'inscripcion':self.ins.pk,'ciclo':self.ca.pk,'archivo':self.archivo()})
+  self.assertEqual(response.status_code,302);documento=DocumentoAlumno.objects.get(alumno=self.al,tipo_documento=self.tipo);self.assertEqual(documento.estado,DocumentoAlumno.Estado.ENTREGADO)
+ def test_formulario_prefill_tipo_inscripcion_y_ciclo(self):
+  self.client.force_login(self.users['ADMINISTRADOR']);response=self.client.get(reverse('alumnos:documento_subir',args=[self.al.pk]),{'tipo':self.tipo.pk})
+  self.assertEqual(response.status_code,200);self.assertEqual(response.context['form'].initial['tipo_documento'],self.tipo);self.assertEqual(response.context['form'].initial['inscripcion'],self.ins);self.assertEqual(response.context['form'].initial['ciclo'],self.ca)
+ def test_tipo_de_otro_tenant_no_aparece_ni_se_acepta(self):
+  externo=TipoDocumentoAlumno.objects.create(institucion=self.b,codigo='EXTERNO',nombre='Privado');self.client.force_login(self.users['ADMINISTRADOR']);url=reverse('alumnos:documento_subir',args=[self.al.pk])
+  self.assertEqual(self.client.get(url,{'tipo':externo.pk}).status_code,404)
+  response=self.client.post(url,{'tipo_documento':externo.pk,'inscripcion':self.ins.pk,'ciclo':self.ca.pk,'archivo':self.archivo()});self.assertEqual(response.status_code,200);self.assertFalse(DocumentoAlumno.objects.filter(alumno=self.al,tipo_documento=externo).exists())
+ def test_requisitos_del_mismo_tipo_prefieren_el_mas_especifico(self):
+  especifico=RequisitoDocumentoAlumno.objects.create(institucion=self.a,tipo_documento=self.tipo,aplica_a_grado=self.ga,obligatorio=True)
+  resumen=resumen_expediente(self.al,self.ins);items=[item for item in resumen['items'] if item['requisito'].tipo_documento_id==self.tipo.pk]
+  self.assertEqual(len(items),1);self.assertEqual(items[0]['requisito'],especifico);self.assertEqual(resumen['total'],1)
+ def test_inscripcion_tiene_etiqueta_amigable(self):
+  self.assertEqual(str(self.ins),'2027 · Primero · Sección A');self.assertNotIn('object',str(self.ins).lower())

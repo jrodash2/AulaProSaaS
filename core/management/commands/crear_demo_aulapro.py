@@ -509,10 +509,10 @@ class Command(BaseCommand):
             )
 
         from alumnos.models import DocumentoAlumno, RequisitoDocumentoAlumno, TipoDocumentoAlumno
-        for orden, (codigo, nombre) in enumerate((("PARTIDA", "Partida de nacimiento"), ("FOTOGRAFIA", "Fotografía"), ("CERTIFICADO_ANTERIOR", "Certificado del grado anterior"), ("DOC_ENCARGADO", "Documento del encargado")), 1):
+        for orden, (codigo, nombre) in enumerate((("PARTIDA_NACIMIENTO", "Partida de nacimiento"), ("FOTOGRAFIA", "Fotografía"), ("CERTIFICADO_ANTERIOR", "Certificado grado anterior"), ("DOCUMENTO_ENCARGADO", "Documento encargado")), 1):
             tipo, _ = TipoDocumentoAlumno.objects.update_or_create(institucion=institucion, codigo=codigo, defaults={"nombre": nombre, "obligatorio": True, "visible_portal": True, "orden": orden})
             RequisitoDocumentoAlumno.objects.get_or_create(institucion=institucion, tipo_documento=tipo, defaults={"obligatorio": True})
-        partida = TipoDocumentoAlumno.objects.get(institucion=institucion, codigo="PARTIDA")
+        partida = TipoDocumentoAlumno.objects.get(institucion=institucion, codigo="PARTIDA_NACIMIENTO")
         for index, alumno in enumerate(alumnos[:3]):
             DocumentoAlumno.objects.get_or_create(institucion=institucion, alumno=alumno, tipo_documento=partida, defaults={"estado": "RECHAZADO" if index == 2 else "APROBADO", "motivo_rechazo": "Archivo ilegible." if index == 2 else "", "cargado_por": admin, "revisado_por": admin, "fecha_revision": timezone.now()})
 

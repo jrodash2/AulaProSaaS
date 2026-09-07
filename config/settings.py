@@ -102,7 +102,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": "aulapro",
         "USER": "postgres",
-        "PASSWORD": "Jrodash2*",
+        "PASSWORD": "Jrodash2#",
         "HOST": "localhost",
         "PORT": "5432",
     }
